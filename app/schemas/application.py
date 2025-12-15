@@ -26,7 +26,6 @@ class ApplicationCreate(ApplicationBase):
 class ApplicationUpdate(BaseSchema):
     """更新应聘申请请求"""
     
-    status: Optional[str] = Field(None, description="申请状态")
     notes: Optional[str] = None
 
 
@@ -35,7 +34,6 @@ class ApplicationResponse(TimestampSchema):
     
     position_id: str
     resume_id: str
-    status: str
     notes: Optional[str]
     
     # 关联信息（简化）
@@ -48,7 +46,6 @@ class ApplicationListResponse(TimestampSchema):
     
     position_id: str
     resume_id: str
-    status: str
     position_title: Optional[str] = None
     candidate_name: Optional[str] = None
 

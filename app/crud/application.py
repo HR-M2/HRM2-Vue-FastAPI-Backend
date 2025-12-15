@@ -77,28 +77,6 @@ class CRUDApplication(CRUDBase[Application]):
         )
         return list(result.scalars().all())
     
-    async def get_by_status(
-        self,
-        db: AsyncSession,
-        status: str,
-        *,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Application]:
-        """获取某状态的所有申请"""
-        result = await db.execute(
-            select(self.model)
-            .options(
-                selectinload(self.model.position),
-                selectinload(self.model.resume),
-            )
-            .where(self.model.status == status)
-            .order_by(self.model.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        return list(result.scalars().all())
-    
     async def count_by_position(
         self,
         db: AsyncSession,
@@ -109,19 +87,6 @@ class CRUDApplication(CRUDBase[Application]):
             select(func.count())
             .select_from(self.model)
             .where(self.model.position_id == position_id)
-        )
-        return result.scalar() or 0
-    
-    async def count_by_status(
-        self,
-        db: AsyncSession,
-        status: str
-    ) -> int:
-        """统计某状态的申请数量"""
-        result = await db.execute(
-            select(func.count())
-            .select_from(self.model)
-            .where(self.model.status == status)
         )
         return result.scalar() or 0
     

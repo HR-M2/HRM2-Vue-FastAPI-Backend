@@ -14,9 +14,8 @@ from app.core.response import (
     MessageResponse,
     DictResponse,
 )
-from app.core.exceptions import NotFoundException, ConflictException, BadRequestException
+from app.core.exceptions import NotFoundException, ConflictException
 from app.crud import application_crud, position_crud, resume_crud
-from app.models.application import ApplicationStatus
 from app.schemas.application import (
     ApplicationCreate,
     ApplicationUpdate,
@@ -38,7 +37,6 @@ async def get_applications(
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     position_id: Optional[str] = Query(None, description="岗位ID筛选"),
     resume_id: Optional[str] = Query(None, description="简历ID筛选"),
-    status: Optional[str] = Query(None, description="状态筛选"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -56,11 +54,6 @@ async def get_applications(
             db, resume_id, skip=skip, limit=page_size
         )
         total = len(applications)
-    elif status:
-        applications = await application_crud.get_by_status(
-            db, status, skip=skip, limit=page_size
-        )
-        total = await application_crud.count_by_status(db, status)
     else:
         applications = await application_crud.get_multi(
             db, skip=skip, limit=page_size
@@ -183,17 +176,11 @@ async def update_application(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    更新应聘申请状态
+    更新应聘申请备注
     """
     application = await application_crud.get(db, application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {application_id}")
-    
-    # 验证状态值
-    if data.status:
-        valid_statuses = [s.value for s in ApplicationStatus]
-        if data.status not in valid_statuses:
-            raise BadRequestException(f"无效的状态值: {data.status}")
     
     application = await application_crud.update_application(
         db, db_obj=application, obj_in=data
@@ -226,13 +213,7 @@ async def get_stats_overview(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    获取申请状态统计概览
+    获取申请统计概览
     """
-    stats = {}
-    for status in ApplicationStatus:
-        count = await application_crud.count_by_status(db, status.value)
-        stats[status.value] = count
-    
-    stats["total"] = await application_crud.count(db)
-    
-    return success_response(data=stats)
+    total = await application_crud.count(db)
+    return success_response(data={"total": total})
