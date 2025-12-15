@@ -4,10 +4,14 @@
 使用 pydantic-settings 管理环境变量和应用配置
 """
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 import json
+
+# 项目根目录 (HRM2-Vue-FastAPI-Backend)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -25,7 +29,7 @@ class Settings(BaseSettings):
     debug: bool = True
     
     # 数据库配置
-    database_url: str = "sqlite+aiosqlite:///./data/hrm2.db"
+    database_url: str = f"sqlite+aiosqlite:///{BASE_DIR / 'data' / 'hrm2.db'}"
     
     # CORS 配置
     cors_origins: List[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
