@@ -1,0 +1,106 @@
+"""
+筛选任务 CRUD 操作
+"""
+from typing import Optional, List
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.screening import ScreeningTask
+from app.schemas.screening import ScreeningTaskCreate, ScreeningResultUpdate
+from .base import CRUDBase
+
+
+class CRUDScreening(CRUDBase[ScreeningTask]):
+    """筛选任务 CRUD 操作类"""
+    
+    async def get_with_application(
+        self,
+        db: AsyncSession,
+        id: str
+    ) -> Optional[ScreeningTask]:
+        """获取任务详情（含申请信息）"""
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.application)
+                .selectinload("position"),
+                selectinload(self.model.application)
+                .selectinload("resume"),
+            )
+            .where(self.model.id == id)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_by_application(
+        self,
+        db: AsyncSession,
+        application_id: str,
+        *,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[ScreeningTask]:
+        """获取某申请的所有筛选任务"""
+        result = await db.execute(
+            select(self.model)
+            .where(self.model.application_id == application_id)
+            .order_by(self.model.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+    
+    async def get_latest_by_application(
+        self,
+        db: AsyncSession,
+        application_id: str
+    ) -> Optional[ScreeningTask]:
+        """获取某申请的最新筛选任务"""
+        result = await db.execute(
+            select(self.model)
+            .where(self.model.application_id == application_id)
+            .order_by(self.model.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_by_status(
+        self,
+        db: AsyncSession,
+        status: str,
+        *,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[ScreeningTask]:
+        """获取某状态的所有任务"""
+        result = await db.execute(
+            select(self.model)
+            .where(self.model.status == status)
+            .order_by(self.model.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+    
+    async def create_task(
+        self,
+        db: AsyncSession,
+        *,
+        obj_in: ScreeningTaskCreate
+    ) -> ScreeningTask:
+        """创建筛选任务"""
+        return await self.create(db, obj_in=obj_in.model_dump())
+    
+    async def update_result(
+        self,
+        db: AsyncSession,
+        *,
+        db_obj: ScreeningTask,
+        obj_in: ScreeningResultUpdate
+    ) -> ScreeningTask:
+        """更新筛选结果"""
+        update_data = obj_in.model_dump(exclude_unset=True)
+        return await self.update(db, db_obj=db_obj, obj_in=update_data)
+
+
+screening_crud = CRUDScreening(ScreeningTask)

@@ -1,0 +1,69 @@
+"""
+应用配置模块
+
+使用 pydantic-settings 管理环境变量和应用配置
+"""
+from functools import lru_cache
+from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+import json
+
+
+class Settings(BaseSettings):
+    """应用配置类"""
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
+    
+    # 应用基础配置
+    app_name: str = "HRM2-API"
+    app_env: str = "development"
+    debug: bool = True
+    
+    # 数据库配置
+    database_url: str = "sqlite+aiosqlite:///./data/hrm2.db"
+    
+    # CORS 配置
+    cors_origins: List[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    # LLM 配置
+    llm_model: str = "deepseek-chat"
+    llm_api_key: str = ""
+    llm_base_url: str = "https://api.deepseek.com"
+    llm_temperature: float = 0.7
+    llm_timeout: int = 60
+    
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """解析 CORS 来源配置（支持 JSON 字符串或列表）"""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return [origin.strip() for origin in v.split(",")]
+        return v
+    
+    @property
+    def is_development(self) -> bool:
+        """是否为开发环境"""
+        return self.app_env == "development"
+    
+    @property
+    def is_production(self) -> bool:
+        """是否为生产环境"""
+        return self.app_env == "production"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """获取配置单例"""
+    return Settings()
+
+
+# 全局配置实例
+settings = get_settings()

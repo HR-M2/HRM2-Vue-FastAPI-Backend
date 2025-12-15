@@ -1,0 +1,21 @@
+# FastAPI 核心
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.3
+pydantic-settings==2.7.0
+
+# 数据库
+sqlalchemy==2.0.36
+alembic==1.14.0
+aiosqlite==0.20.0
+
+# 异步支持
+httpx==0.28.1
+python-multipart==0.0.19
+
+# 工具
+python-dotenv==1.0.1
+loguru==0.7.3
+
+# AI/LLM (可选)
+openai==1.58.1

@@ -1,0 +1,159 @@
+"""
+简历筛选 API 路由
+"""
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.response import success_response, paged_response
+from app.core.exceptions import NotFoundException
+from app.crud import screening_crud, application_crud
+from app.models.screening import TaskStatus
+from app.schemas.screening import (
+    ScreeningTaskCreate,
+    ScreeningTaskResponse,
+    ScreeningResultUpdate,
+)
+
+router = APIRouter()
+
+
+@router.get("", summary="获取筛选任务列表")
+async def get_screening_tasks(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    application_id: Optional[str] = Query(None, description="应聘申请ID"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取筛选任务列表
+    """
+    skip = (page - 1) * page_size
+    
+    if application_id:
+        tasks = await screening_crud.get_by_application(
+            db, application_id, skip=skip, limit=page_size
+        )
+    elif status:
+        tasks = await screening_crud.get_by_status(
+            db, status, skip=skip, limit=page_size
+        )
+    else:
+        tasks = await screening_crud.get_multi(db, skip=skip, limit=page_size)
+    
+    total = await screening_crud.count(db)
+    
+    items = [
+        ScreeningTaskResponse.model_validate(t).model_dump()
+        for t in tasks
+    ]
+    
+    return paged_response(items, total, page, page_size)
+
+
+@router.post("", summary="创建筛选任务")
+async def create_screening_task(
+    data: ScreeningTaskCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    为指定应聘申请创建筛选任务
+    """
+    # 验证应聘申请存在
+    application = await application_crud.get_detail(db, data.application_id)
+    if not application:
+        raise NotFoundException(f"应聘申请不存在: {data.application_id}")
+    
+    task = await screening_crud.create_task(db, obj_in=data)
+    
+    response = ScreeningTaskResponse.model_validate(task)
+    if application.resume:
+        response.candidate_name = application.resume.candidate_name
+    if application.position:
+        response.position_title = application.position.title
+    
+    return success_response(
+        data=response.model_dump(),
+        message="筛选任务创建成功"
+    )
+
+
+@router.get("/{task_id}", summary="获取筛选任务详情")
+async def get_screening_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取筛选任务详情
+    """
+    task = await screening_crud.get_with_application(db, task_id)
+    if not task:
+        raise NotFoundException(f"筛选任务不存在: {task_id}")
+    
+    response = ScreeningTaskResponse.model_validate(task)
+    if task.application:
+        if task.application.resume:
+            response.candidate_name = task.application.resume.candidate_name
+        if task.application.position:
+            response.position_title = task.application.position.title
+    
+    return success_response(data=response.model_dump())
+
+
+@router.get("/{task_id}/status", summary="获取筛选任务状态")
+async def get_screening_status(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取筛选任务状态（轮询用）
+    """
+    task = await screening_crud.get(db, task_id)
+    if not task:
+        raise NotFoundException(f"筛选任务不存在: {task_id}")
+    
+    return success_response(data={
+        "id": task.id,
+        "status": task.status,
+        "progress": task.progress,
+        "error_message": task.error_message,
+    })
+
+
+@router.patch("/{task_id}", summary="更新筛选结果")
+async def update_screening_result(
+    task_id: str,
+    data: ScreeningResultUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    更新筛选任务结果（供 AI 服务回调）
+    """
+    task = await screening_crud.get(db, task_id)
+    if not task:
+        raise NotFoundException(f"筛选任务不存在: {task_id}")
+    
+    task = await screening_crud.update_result(db, db_obj=task, obj_in=data)
+    
+    return success_response(
+        data=ScreeningTaskResponse.model_validate(task).model_dump(),
+        message="筛选结果更新成功"
+    )
+
+
+@router.delete("/{task_id}", summary="删除筛选任务")
+async def delete_screening_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    删除筛选任务
+    """
+    task = await screening_crud.get(db, task_id)
+    if not task:
+        raise NotFoundException(f"筛选任务不存在: {task_id}")
+    
+    await screening_crud.delete(db, id=task_id)
+    return success_response(message="筛选任务删除成功")

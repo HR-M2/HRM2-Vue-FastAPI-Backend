@@ -1,0 +1,164 @@
+"""
+应聘申请 CRUD 操作
+"""
+from typing import Optional, List
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.application import Application
+from app.schemas.application import ApplicationCreate, ApplicationUpdate
+from .base import CRUDBase
+
+
+class CRUDApplication(CRUDBase[Application]):
+    """应聘申请 CRUD 操作类"""
+    
+    async def get_detail(
+        self,
+        db: AsyncSession,
+        id: str
+    ) -> Optional[Application]:
+        """获取申请详情（含所有关联数据）"""
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.position),
+                selectinload(self.model.resume),
+                selectinload(self.model.screening_tasks),
+                selectinload(self.model.video_analyses),
+                selectinload(self.model.interview_sessions),
+                selectinload(self.model.comprehensive_analyses),
+            )
+            .where(self.model.id == id)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_by_position(
+        self,
+        db: AsyncSession,
+        position_id: str,
+        *,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Application]:
+        """获取某岗位的所有申请"""
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.resume),
+            )
+            .where(self.model.position_id == position_id)
+            .order_by(self.model.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+    
+    async def get_by_resume(
+        self,
+        db: AsyncSession,
+        resume_id: str,
+        *,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Application]:
+        """获取某简历的所有申请"""
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.position),
+            )
+            .where(self.model.resume_id == resume_id)
+            .order_by(self.model.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+    
+    async def get_by_status(
+        self,
+        db: AsyncSession,
+        status: str,
+        *,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Application]:
+        """获取某状态的所有申请"""
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.position),
+                selectinload(self.model.resume),
+            )
+            .where(self.model.status == status)
+            .order_by(self.model.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+    
+    async def count_by_position(
+        self,
+        db: AsyncSession,
+        position_id: str
+    ) -> int:
+        """统计某岗位的申请数量"""
+        result = await db.execute(
+            select(func.count())
+            .select_from(self.model)
+            .where(self.model.position_id == position_id)
+        )
+        return result.scalar() or 0
+    
+    async def count_by_status(
+        self,
+        db: AsyncSession,
+        status: str
+    ) -> int:
+        """统计某状态的申请数量"""
+        result = await db.execute(
+            select(func.count())
+            .select_from(self.model)
+            .where(self.model.status == status)
+        )
+        return result.scalar() or 0
+    
+    async def exists(
+        self,
+        db: AsyncSession,
+        position_id: str,
+        resume_id: str
+    ) -> bool:
+        """检查申请是否已存在"""
+        result = await db.execute(
+            select(self.model)
+            .where(
+                self.model.position_id == position_id,
+                self.model.resume_id == resume_id
+            )
+        )
+        return result.scalar_one_or_none() is not None
+    
+    async def create_application(
+        self,
+        db: AsyncSession,
+        *,
+        obj_in: ApplicationCreate
+    ) -> Application:
+        """创建申请"""
+        return await self.create(db, obj_in=obj_in.model_dump())
+    
+    async def update_application(
+        self,
+        db: AsyncSession,
+        *,
+        db_obj: Application,
+        obj_in: ApplicationUpdate
+    ) -> Application:
+        """更新申请"""
+        update_data = obj_in.model_dump(exclude_unset=True)
+        return await self.update(db, db_obj=db_obj, obj_in=update_data)
+
+
+application_crud = CRUDApplication(Application)
