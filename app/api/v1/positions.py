@@ -6,7 +6,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import success_response, paged_response
+from app.core.response import (
+    success_response,
+    paged_response,
+    ResponseModel,
+    PagedResponseModel,
+    MessageResponse,
+)
 from app.core.exceptions import NotFoundException, ConflictException
 from app.crud import position_crud
 from app.schemas.position import (
@@ -19,7 +25,7 @@ from app.schemas.position import (
 router = APIRouter()
 
 
-@router.get("", summary="获取岗位列表")
+@router.get("", summary="获取岗位列表", response_model=PagedResponseModel[PositionListResponse])
 async def get_positions(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -51,7 +57,7 @@ async def get_positions(
     return paged_response(items, total, page, page_size)
 
 
-@router.post("", summary="创建岗位")
+@router.post("", summary="创建岗位", response_model=ResponseModel[PositionResponse])
 async def create_position(
     data: PositionCreate,
     db: AsyncSession = Depends(get_db),
@@ -71,7 +77,7 @@ async def create_position(
     )
 
 
-@router.get("/{position_id}", summary="获取岗位详情")
+@router.get("/{position_id}", summary="获取岗位详情", response_model=ResponseModel[PositionResponse])
 async def get_position(
     position_id: str,
     db: AsyncSession = Depends(get_db),
@@ -89,7 +95,7 @@ async def get_position(
     return success_response(data=response.model_dump())
 
 
-@router.patch("/{position_id}", summary="更新岗位")
+@router.patch("/{position_id}", summary="更新岗位", response_model=ResponseModel[PositionResponse])
 async def update_position(
     position_id: str,
     data: PositionUpdate,
@@ -115,7 +121,7 @@ async def update_position(
     )
 
 
-@router.delete("/{position_id}", summary="删除岗位")
+@router.delete("/{position_id}", summary="删除岗位", response_model=MessageResponse)
 async def delete_position(
     position_id: str,
     db: AsyncSession = Depends(get_db),

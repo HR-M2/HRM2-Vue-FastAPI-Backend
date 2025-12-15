@@ -3,8 +3,8 @@
 
 定义标准 API 响应格式
 """
-from typing import Any, Generic, Optional, TypeVar
-from pydantic import BaseModel
+from typing import Any, Generic, Optional, TypeVar, Dict
+from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
@@ -34,6 +34,34 @@ class PagedData(BaseModel, Generic[T]):
     page: int
     page_size: int
     pages: int  # 总页数
+
+
+class PagedResponseModel(BaseModel, Generic[T]):
+    """
+    分页响应模型
+    
+    用于 response_model 的完整分页响应
+    """
+    success: bool = True
+    code: int = 200
+    message: str = "查询成功"
+    data: PagedData[T]
+
+
+class MessageResponse(BaseModel):
+    """仅消息响应（无数据）"""
+    success: bool = True
+    code: int = 200
+    message: str = "操作成功"
+    data: None = None
+
+
+class DictResponse(BaseModel):
+    """字典数据响应"""
+    success: bool = True
+    code: int = 200
+    message: str = "操作成功"
+    data: Optional[Dict[str, Any]] = None
 
 
 def success_response(

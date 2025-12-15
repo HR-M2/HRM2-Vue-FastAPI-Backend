@@ -1,13 +1,20 @@
 """
 简历管理 API 路由
 """
-from typing import Optional, List
+from typing import Optional, List, Dict
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import success_response, paged_response
+from app.core.response import (
+    success_response,
+    paged_response,
+    ResponseModel,
+    PagedResponseModel,
+    MessageResponse,
+    DictResponse,
+)
 from app.core.exceptions import NotFoundException, ConflictException
 from app.crud import resume_crud
 from app.schemas.resume import (
@@ -17,10 +24,27 @@ from app.schemas.resume import (
     ResumeListResponse,
 )
 
+
+class HashCheckData(BaseModel):
+    """哈希检查结果"""
+    exists: bool
+
+
+class BatchDeleteData(BaseModel):
+    """批量删除结果"""
+    deleted_count: int
+    requested_count: int
+
+
+class BatchHashCheckData(BaseModel):
+    """批量哈希检查结果"""
+    exists: Dict[str, bool]
+    existing_count: int
+
 router = APIRouter()
 
 
-@router.get("", summary="获取简历列表")
+@router.get("", summary="获取简历列表", response_model=PagedResponseModel[ResumeListResponse])
 async def get_resumes(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -50,7 +74,7 @@ async def get_resumes(
     return paged_response(items, total, page, page_size)
 
 
-@router.post("", summary="创建简历")
+@router.post("", summary="创建简历", response_model=ResponseModel[ResumeResponse])
 async def create_resume(
     data: ResumeCreate,
     db: AsyncSession = Depends(get_db),
@@ -70,7 +94,7 @@ async def create_resume(
     )
 
 
-@router.get("/check-hash", summary="检查文件哈希")
+@router.get("/check-hash", summary="检查文件哈希", response_model=ResponseModel[HashCheckData])
 async def check_hash(
     file_hash: str = Query(..., description="文件哈希值"),
     db: AsyncSession = Depends(get_db),
@@ -82,7 +106,7 @@ async def check_hash(
     return success_response(data={"exists": exists})
 
 
-@router.get("/{resume_id}", summary="获取简历详情")
+@router.get("/{resume_id}", summary="获取简历详情", response_model=ResponseModel[ResumeResponse])
 async def get_resume(
     resume_id: str,
     db: AsyncSession = Depends(get_db),
@@ -100,7 +124,7 @@ async def get_resume(
     return success_response(data=response.model_dump())
 
 
-@router.patch("/{resume_id}", summary="更新简历")
+@router.patch("/{resume_id}", summary="更新简历", response_model=ResponseModel[ResumeResponse])
 async def update_resume(
     resume_id: str,
     data: ResumeUpdate,
@@ -120,7 +144,7 @@ async def update_resume(
     )
 
 
-@router.delete("/{resume_id}", summary="删除简历")
+@router.delete("/{resume_id}", summary="删除简历", response_model=MessageResponse)
 async def delete_resume(
     resume_id: str,
     db: AsyncSession = Depends(get_db),
@@ -148,7 +172,7 @@ class CheckHashesRequest(BaseModel):
     hashes: List[str] = Field(..., min_length=1, description="哈希值列表")
 
 
-@router.post("/batch-delete", summary="批量删除简历")
+@router.post("/batch-delete", summary="批量删除简历", response_model=ResponseModel[BatchDeleteData])
 async def batch_delete_resumes(
     data: BatchDeleteRequest,
     db: AsyncSession = Depends(get_db),
@@ -166,7 +190,7 @@ async def batch_delete_resumes(
     )
 
 
-@router.post("/check-hashes", summary="批量检查哈希")
+@router.post("/check-hashes", summary="批量检查哈希", response_model=ResponseModel[BatchHashCheckData])
 async def check_hashes(
     data: CheckHashesRequest,
     db: AsyncSession = Depends(get_db),

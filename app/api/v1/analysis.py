@@ -6,7 +6,14 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import success_response, paged_response
+from app.core.response import (
+    success_response,
+    paged_response,
+    ResponseModel,
+    PagedResponseModel,
+    MessageResponse,
+    DictResponse,
+)
 from app.core.exceptions import NotFoundException
 from app.crud import analysis_crud, application_crud
 from app.models.analysis import RecommendationLevel
@@ -19,7 +26,7 @@ from app.schemas.analysis import (
 router = APIRouter()
 
 
-@router.get("", summary="获取综合分析列表")
+@router.get("", summary="获取综合分析列表", response_model=PagedResponseModel[ComprehensiveAnalysisResponse])
 async def get_analyses(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -53,7 +60,7 @@ async def get_analyses(
     return paged_response(items, total, page, page_size)
 
 
-@router.post("", summary="创建综合分析")
+@router.post("", summary="创建综合分析", response_model=ResponseModel[ComprehensiveAnalysisResponse])
 async def create_analysis(
     data: ComprehensiveAnalysisCreate,
     db: AsyncSession = Depends(get_db),
@@ -103,7 +110,7 @@ async def create_analysis(
     )
 
 
-@router.get("/{analysis_id}", summary="获取综合分析详情")
+@router.get("/{analysis_id}", summary="获取综合分析详情", response_model=ResponseModel[ComprehensiveAnalysisResponse])
 async def get_analysis(
     analysis_id: str,
     db: AsyncSession = Depends(get_db),
@@ -125,7 +132,7 @@ async def get_analysis(
     return success_response(data=response.model_dump())
 
 
-@router.delete("/{analysis_id}", summary="删除综合分析")
+@router.delete("/{analysis_id}", summary="删除综合分析", response_model=MessageResponse)
 async def delete_analysis(
     analysis_id: str,
     db: AsyncSession = Depends(get_db),
@@ -141,7 +148,7 @@ async def delete_analysis(
     return success_response(message="综合分析删除成功")
 
 
-@router.get("/stats/recommendation", summary="获取推荐等级统计")
+@router.get("/stats/recommendation", summary="获取推荐等级统计", response_model=DictResponse)
 async def get_recommendation_stats(
     db: AsyncSession = Depends(get_db),
 ):

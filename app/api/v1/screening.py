@@ -8,7 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import quote
 
 from app.core.database import get_db
-from app.core.response import success_response, paged_response
+from app.core.response import (
+    success_response,
+    paged_response,
+    ResponseModel,
+    PagedResponseModel,
+    MessageResponse,
+    DictResponse,
+)
 from app.core.exceptions import NotFoundException
 from app.crud import screening_crud, application_crud
 from app.models.screening import TaskStatus
@@ -21,7 +28,7 @@ from app.schemas.screening import (
 router = APIRouter()
 
 
-@router.get("", summary="获取筛选任务列表")
+@router.get("", summary="获取筛选任务列表", response_model=PagedResponseModel[ScreeningTaskResponse])
 async def get_screening_tasks(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -55,7 +62,7 @@ async def get_screening_tasks(
     return paged_response(items, total, page, page_size)
 
 
-@router.post("", summary="创建筛选任务")
+@router.post("", summary="创建筛选任务", response_model=ResponseModel[ScreeningTaskResponse])
 async def create_screening_task(
     data: ScreeningTaskCreate,
     db: AsyncSession = Depends(get_db),
@@ -82,7 +89,7 @@ async def create_screening_task(
     )
 
 
-@router.get("/{task_id}", summary="获取筛选任务详情")
+@router.get("/{task_id}", summary="获取筛选任务详情", response_model=ResponseModel[ScreeningTaskResponse])
 async def get_screening_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
@@ -104,7 +111,7 @@ async def get_screening_task(
     return success_response(data=response.model_dump())
 
 
-@router.get("/{task_id}/status", summary="获取筛选任务状态")
+@router.get("/{task_id}/status", summary="获取筛选任务状态", response_model=DictResponse)
 async def get_screening_status(
     task_id: str,
     db: AsyncSession = Depends(get_db),
@@ -124,7 +131,7 @@ async def get_screening_status(
     })
 
 
-@router.patch("/{task_id}", summary="更新筛选结果")
+@router.patch("/{task_id}", summary="更新筛选结果", response_model=ResponseModel[ScreeningTaskResponse])
 async def update_screening_result(
     task_id: str,
     data: ScreeningResultUpdate,
@@ -145,7 +152,7 @@ async def update_screening_result(
     )
 
 
-@router.delete("/{task_id}", summary="删除筛选任务")
+@router.delete("/{task_id}", summary="删除筛选任务", response_model=MessageResponse)
 async def delete_screening_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),

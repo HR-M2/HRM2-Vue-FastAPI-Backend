@@ -6,7 +6,14 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import success_response, paged_response
+from app.core.response import (
+    success_response,
+    paged_response,
+    ResponseModel,
+    PagedResponseModel,
+    MessageResponse,
+    DictResponse,
+)
 from app.core.exceptions import NotFoundException, BadRequestException
 from app.crud import interview_crud, application_crud
 from app.schemas.interview import (
@@ -21,7 +28,7 @@ from app.schemas.interview import (
 router = APIRouter()
 
 
-@router.get("", summary="获取面试会话列表")
+@router.get("", summary="获取面试会话列表", response_model=PagedResponseModel[InterviewSessionResponse])
 async def get_interview_sessions(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -52,7 +59,7 @@ async def get_interview_sessions(
     return paged_response(items, total, page, page_size)
 
 
-@router.post("", summary="创建面试会话")
+@router.post("", summary="创建面试会话", response_model=ResponseModel[InterviewSessionResponse])
 async def create_interview_session(
     data: InterviewSessionCreate,
     db: AsyncSession = Depends(get_db),
@@ -85,7 +92,7 @@ async def create_interview_session(
     )
 
 
-@router.get("/{session_id}", summary="获取面试会话详情")
+@router.get("/{session_id}", summary="获取面试会话详情", response_model=ResponseModel[InterviewSessionResponse])
 async def get_interview_session(
     session_id: str,
     db: AsyncSession = Depends(get_db),
@@ -110,7 +117,7 @@ async def get_interview_session(
     return success_response(data=response.model_dump())
 
 
-@router.post("/{session_id}/questions", summary="生成面试问题")
+@router.post("/{session_id}/questions", summary="生成面试问题", response_model=DictResponse)
 async def generate_questions(
     session_id: str,
     data: GenerateQuestionsRequest,
@@ -147,7 +154,7 @@ async def generate_questions(
     )
 
 
-@router.post("/{session_id}/qa", summary="记录问答")
+@router.post("/{session_id}/qa", summary="记录问答", response_model=DictResponse)
 async def record_qa(
     session_id: str,
     data: QARecordCreate,
@@ -181,7 +188,7 @@ async def record_qa(
     )
 
 
-@router.post("/{session_id}/complete", summary="完成面试会话")
+@router.post("/{session_id}/complete", summary="完成面试会话", response_model=ResponseModel[InterviewSessionResponse])
 async def complete_session(
     session_id: str,
     db: AsyncSession = Depends(get_db),
@@ -225,7 +232,7 @@ async def complete_session(
     )
 
 
-@router.delete("/{session_id}", summary="删除面试会话")
+@router.delete("/{session_id}", summary="删除面试会话", response_model=MessageResponse)
 async def delete_interview_session(
     session_id: str,
     db: AsyncSession = Depends(get_db),

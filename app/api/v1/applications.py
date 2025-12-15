@@ -6,7 +6,14 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import success_response, paged_response
+from app.core.response import (
+    success_response,
+    paged_response,
+    ResponseModel,
+    PagedResponseModel,
+    MessageResponse,
+    DictResponse,
+)
 from app.core.exceptions import NotFoundException, ConflictException, BadRequestException
 from app.crud import application_crud, position_crud, resume_crud
 from app.models.application import ApplicationStatus
@@ -25,7 +32,7 @@ from app.schemas.application import (
 router = APIRouter()
 
 
-@router.get("", summary="获取应聘申请列表")
+@router.get("", summary="获取应聘申请列表", response_model=PagedResponseModel[ApplicationListResponse])
 async def get_applications(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -72,7 +79,7 @@ async def get_applications(
     return paged_response(items, total, page, page_size)
 
 
-@router.post("", summary="创建应聘申请")
+@router.post("", summary="创建应聘申请", response_model=ResponseModel[ApplicationResponse])
 async def create_application(
     data: ApplicationCreate,
     db: AsyncSession = Depends(get_db),
@@ -106,7 +113,7 @@ async def create_application(
     )
 
 
-@router.get("/{application_id}", summary="获取应聘申请详情")
+@router.get("/{application_id}", summary="获取应聘申请详情", response_model=ResponseModel[ApplicationDetailResponse])
 async def get_application(
     application_id: str,
     db: AsyncSession = Depends(get_db),
@@ -169,7 +176,7 @@ async def get_application(
     return success_response(data=response.model_dump())
 
 
-@router.patch("/{application_id}", summary="更新应聘申请")
+@router.patch("/{application_id}", summary="更新应聘申请", response_model=ResponseModel[ApplicationResponse])
 async def update_application(
     application_id: str,
     data: ApplicationUpdate,
@@ -198,7 +205,7 @@ async def update_application(
     )
 
 
-@router.delete("/{application_id}", summary="删除应聘申请")
+@router.delete("/{application_id}", summary="删除应聘申请", response_model=MessageResponse)
 async def delete_application(
     application_id: str,
     db: AsyncSession = Depends(get_db),
@@ -214,7 +221,7 @@ async def delete_application(
     return success_response(message="应聘申请删除成功")
 
 
-@router.get("/stats/overview", summary="获取申请统计概览")
+@router.get("/stats/overview", summary="获取申请统计概览", response_model=DictResponse)
 async def get_stats_overview(
     db: AsyncSession = Depends(get_db),
 ):

@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import success_response
+from app.core.response import success_response, ResponseModel, DictResponse
 from app.core.exceptions import NotFoundException, BadRequestException
 from app.crud import position_crud, application_crud, screening_crud, interview_crud
 from app.services.agents import (
@@ -93,7 +93,7 @@ class RandomResumeRequest(BaseModel):
 
 # ============ LLM 状态 ============
 
-@router.get("/status", summary="获取LLM服务状态")
+@router.get("/status", summary="获取LLM服务状态", response_model=DictResponse)
 async def get_ai_status():
     """
     获取AI/LLM服务配置状态
@@ -105,7 +105,7 @@ async def get_ai_status():
 
 # ============ 岗位需求生成 ============
 
-@router.post("/position/generate", summary="AI生成岗位需求")
+@router.post("/position/generate", summary="AI生成岗位需求", response_model=DictResponse)
 async def ai_generate_position(data: PositionGenerateRequest):
     """
     根据描述使用AI生成结构化的岗位需求
@@ -208,7 +208,7 @@ def _parse_screening_result(messages: List[Dict]) -> Dict[str, Any]:
     return result
 
 
-@router.post("/screening/start", summary="启动AI简历筛选")
+@router.post("/screening/start", summary="启动AI简历筛选", response_model=DictResponse)
 async def start_ai_screening(
     data: ScreeningStartRequest,
     background_tasks: BackgroundTasks,
@@ -281,7 +281,7 @@ async def start_ai_screening(
 
 # ============ 面试问题生成 ============
 
-@router.post("/interview/questions", summary="AI生成面试问题")
+@router.post("/interview/questions", summary="AI生成面试问题", response_model=DictResponse)
 async def ai_generate_questions(
     data: InterviewQuestionsRequest,
     db: AsyncSession = Depends(get_db),
@@ -338,7 +338,7 @@ async def ai_generate_questions(
     return success_response(data=result)
 
 
-@router.post("/interview/evaluate", summary="AI评估回答")
+@router.post("/interview/evaluate", summary="AI评估回答", response_model=DictResponse)
 async def ai_evaluate_answer(data: AnswerEvaluateRequest):
     """
     AI评估候选人的回答质量
@@ -362,7 +362,7 @@ async def ai_evaluate_answer(data: AnswerEvaluateRequest):
     return success_response(data=result)
 
 
-@router.post("/interview/candidate-questions", summary="AI生成候选问题")
+@router.post("/interview/candidate-questions", summary="AI生成候选问题", response_model=DictResponse)
 async def ai_generate_candidate_questions(data: CandidateQuestionsRequest):
     """
     根据当前面试上下文生成下一步候选问题
@@ -386,7 +386,7 @@ async def ai_generate_candidate_questions(data: CandidateQuestionsRequest):
     return success_response(data={"candidate_questions": result})
 
 
-@router.post("/interview/report", summary="AI生成面试报告")
+@router.post("/interview/report", summary="AI生成面试报告", response_model=DictResponse)
 async def ai_generate_report(
     data: FinalReportRequest,
     db: AsyncSession = Depends(get_db),
@@ -470,7 +470,7 @@ def _format_report_markdown(report: Dict, candidate_name: str) -> str:
 
 # ============ 综合分析 ============
 
-@router.post("/analysis/comprehensive", summary="AI综合分析评估")
+@router.post("/analysis/comprehensive", summary="AI综合分析评估", response_model=DictResponse)
 async def ai_comprehensive_analysis(
     data: ComprehensiveAnalysisRequest,
     db: AsyncSession = Depends(get_db),
@@ -538,7 +538,7 @@ async def ai_comprehensive_analysis(
 
 # ============ 开发测试工具 ============
 
-@router.post("/dev/random-resume", summary="生成随机简历（测试用）")
+@router.post("/dev/random-resume", summary="生成随机简历（测试用）", response_model=DictResponse)
 async def generate_random_resume(
     data: RandomResumeRequest,
     db: AsyncSession = Depends(get_db),

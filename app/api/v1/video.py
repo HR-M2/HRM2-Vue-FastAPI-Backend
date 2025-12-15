@@ -6,7 +6,14 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import success_response, paged_response
+from app.core.response import (
+    success_response,
+    paged_response,
+    ResponseModel,
+    PagedResponseModel,
+    MessageResponse,
+    DictResponse,
+)
 from app.core.exceptions import NotFoundException
 from app.crud import video_crud, application_crud
 from app.schemas.video import (
@@ -19,7 +26,7 @@ from app.schemas.video import (
 router = APIRouter()
 
 
-@router.get("", summary="获取视频分析列表")
+@router.get("", summary="获取视频分析列表", response_model=PagedResponseModel[VideoAnalysisResponse])
 async def get_video_analyses(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -53,7 +60,7 @@ async def get_video_analyses(
     return paged_response(items, total, page, page_size)
 
 
-@router.post("", summary="创建视频分析")
+@router.post("", summary="创建视频分析", response_model=ResponseModel[VideoAnalysisResponse])
 async def create_video_analysis(
     data: VideoAnalysisCreate,
     db: AsyncSession = Depends(get_db),
@@ -80,7 +87,7 @@ async def create_video_analysis(
     )
 
 
-@router.get("/{video_id}", summary="获取视频分析详情")
+@router.get("/{video_id}", summary="获取视频分析详情", response_model=ResponseModel[VideoAnalysisResponse])
 async def get_video_analysis(
     video_id: str,
     db: AsyncSession = Depends(get_db),
@@ -110,7 +117,7 @@ async def get_video_analysis(
     return success_response(data=response.model_dump())
 
 
-@router.get("/{video_id}/status", summary="获取视频分析状态")
+@router.get("/{video_id}/status", summary="获取视频分析状态", response_model=DictResponse)
 async def get_video_status(
     video_id: str,
     db: AsyncSession = Depends(get_db),
@@ -129,7 +136,7 @@ async def get_video_status(
     })
 
 
-@router.patch("/{video_id}", summary="更新视频分析结果")
+@router.patch("/{video_id}", summary="更新视频分析结果", response_model=ResponseModel[VideoAnalysisResponse])
 async def update_video_result(
     video_id: str,
     data: VideoResultUpdate,
@@ -150,7 +157,7 @@ async def update_video_result(
     )
 
 
-@router.delete("/{video_id}", summary="删除视频分析")
+@router.delete("/{video_id}", summary="删除视频分析", response_model=MessageResponse)
 async def delete_video_analysis(
     video_id: str,
     db: AsyncSession = Depends(get_db),
