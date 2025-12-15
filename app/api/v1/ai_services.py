@@ -19,7 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.response import success_response, ResponseModel, DictResponse
 from app.core.exceptions import NotFoundException, BadRequestException
-from app.crud import position_crud, application_crud, screening_crud, interview_crud
+from app.crud import position_crud, application_crud, screening_crud, interview_crud, resume_crud
+from app.schemas.resume import ResumeCreate
 from app.services.agents import (
     get_position_ai_service,
     get_llm_status,
@@ -573,7 +574,41 @@ async def generate_random_resume(
     else:
         resumes = service.generate_batch_resumes(position_data, data.count)
     
+    # 将生成的简历保存到数据库
+    saved_resumes = []
+    skipped_resumes = []
+    for resume_data in resumes:
+        # 检查是否已存在（通过文件哈希去重）
+        if await resume_crud.check_hash_exists(db, resume_data['file_hash']):
+            skipped_resumes.append({
+                'name': resume_data['name'],
+                'reason': '简历已存在（哈希重复）'
+            })
+            continue
+        
+        # 创建简历记录
+        resume_create = ResumeCreate(
+            candidate_name=resume_data['candidate_name'],
+            content=resume_data['content'],
+            filename=resume_data['name'],
+            file_hash=resume_data['file_hash'],
+            file_size=len(resume_data['content'].encode('utf-8')),
+            notes=f"AI随机生成 - 目标岗位: {position.title}"
+        )
+        saved_resume = await resume_crud.create_resume(db, obj_in=resume_create)
+        saved_resumes.append({
+            'id': saved_resume.id,
+            'candidate_name': saved_resume.candidate_name,
+            'filename': saved_resume.filename
+        })
+    
     return success_response(
-        data={"resumes": resumes},
-        message=f"成功生成 {len(resumes)} 份随机简历"
+        data={
+            "resumes": resumes,
+            "added": saved_resumes,
+            "skipped": skipped_resumes,
+            "added_count": len(saved_resumes),
+            "skipped_count": len(skipped_resumes)
+        },
+        message=f"成功生成 {len(resumes)} 份随机简历，已保存 {len(saved_resumes)} 份到简历库"
     )
