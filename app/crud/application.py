@@ -46,6 +46,7 @@ class CRUDApplication(CRUDBase[Application]):
         result = await db.execute(
             select(self.model)
             .options(
+                selectinload(self.model.position),
                 selectinload(self.model.resume),
             )
             .where(self.model.position_id == position_id)

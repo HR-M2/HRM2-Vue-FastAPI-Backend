@@ -246,8 +246,7 @@ async def start_ai_screening(
         "optional_skills": position.optional_skills or [],
         "min_experience": position.min_experience or 0,
         "education": position.education or [],
-        "salary_range": position.salary_range or [0, 0],
-        "project_requirements": position.project_requirements or {},
+        "salary_range": [position.salary_min or 0, position.salary_max or 0],
     }
     
     # 创建筛选任务
