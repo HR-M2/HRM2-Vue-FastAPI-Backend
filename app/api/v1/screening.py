@@ -37,7 +37,7 @@ async def get_screening_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    获取筛选任务列表
+    获取筛选任务列表（包含候选人和岗位信息）
     """
     skip = (page - 1) * page_size
     
@@ -46,18 +46,26 @@ async def get_screening_tasks(
             db, application_id, skip=skip, limit=page_size
         )
     elif status:
-        tasks = await screening_crud.get_by_status(
-            db, status, skip=skip, limit=page_size
+        tasks = await screening_crud.get_list_with_details(
+            db, status=status, skip=skip, limit=page_size
         )
     else:
-        tasks = await screening_crud.get_multi(db, skip=skip, limit=page_size)
+        tasks = await screening_crud.get_list_with_details(
+            db, skip=skip, limit=page_size
+        )
     
     total = await screening_crud.count(db)
     
-    items = [
-        ScreeningTaskResponse.model_validate(t).model_dump()
-        for t in tasks
-    ]
+    items = []
+    for t in tasks:
+        response = ScreeningTaskResponse.model_validate(t)
+        # 填充关联信息
+        if hasattr(t, 'application') and t.application:
+            if t.application.resume:
+                response.candidate_name = t.application.resume.candidate_name
+            if t.application.position:
+                response.position_title = t.application.position.title
+        items.append(response.model_dump())
     
     return paged_response(items, total, page, page_size)
 
@@ -105,6 +113,7 @@ async def get_screening_task(
     if task.application:
         if task.application.resume:
             response.candidate_name = task.application.resume.candidate_name
+            response.resume_content = task.application.resume.content
         if task.application.position:
             response.position_title = task.application.position.title
     
@@ -118,6 +127,7 @@ async def get_screening_status(
 ):
     """
     获取筛选任务状态（轮询用）
+    返回完整的任务状态信息供前端展示进度
     """
     task = await screening_crud.get(db, task_id)
     if not task:
@@ -128,6 +138,10 @@ async def get_screening_status(
         "status": task.status,
         "progress": task.progress,
         "error_message": task.error_message,
+        "score": task.score,
+        "dimension_scores": task.dimension_scores,
+        "summary": task.summary,
+        "recommendation": task.recommendation,
     })
 
 

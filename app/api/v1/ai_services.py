@@ -149,13 +149,32 @@ async def run_screening_task(
     engine = create_async_engine(db_url)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
+    async def update_progress(progress: int, status: str = "running"):
+        """更新任务进度"""
+        async with async_session() as session:
+            task = await screening_crud.get(session, task_id)
+            if task:
+                task.progress = progress
+                task.status = status
+                await session.commit()
+    
     try:
+        # 更新进度：初始化
+        await update_progress(10)
+        
         # 创建筛选代理管理器
         manager = ScreeningAgentManager(criteria)
         manager.setup()
         
+        # 更新进度：Agent 准备就绪
+        await update_progress(20)
+        
         # 运行筛选（这是同步操作，在线程池中运行）
         loop = asyncio.get_event_loop()
+        
+        # 更新进度：开始筛选
+        await update_progress(30)
+        
         messages = await loop.run_in_executor(
             None,
             manager.run_screening,
@@ -163,8 +182,14 @@ async def run_screening_task(
             resume_content
         )
         
+        # 更新进度：筛选完成，解析结果
+        await update_progress(80)
+        
         # 解析结果
         result = _parse_screening_result(messages)
+        
+        # 更新进度：保存结果
+        await update_progress(90)
         
         # 更新数据库
         async with async_session() as session:
@@ -172,9 +197,9 @@ async def run_screening_task(
             if task:
                 task.status = "completed"
                 task.progress = 100
-                task.agent_messages = messages
-                task.comprehensive_score = result.get("comprehensive_score", 0)
-                task.screening_summary = result.get("summary", "")
+                task.score = result.get("comprehensive_score", 0)
+                task.dimension_scores = result.get("dimension_scores")
+                task.summary = result.get("summary", "")
                 await session.commit()
                 
     except Exception as e:
@@ -190,21 +215,45 @@ async def run_screening_task(
 
 def _parse_screening_result(messages: List[Dict]) -> Dict[str, Any]:
     """解析筛选消息获取评分结果"""
+    import re
+    
     result = {
         "comprehensive_score": 0,
         "summary": "",
+        "dimension_scores": {
+            "hr_score": None,
+            "technical_score": None,
+            "manager_score": None
+        }
     }
     
-    for msg in reversed(messages):
+    # 遍历所有消息提取各维度评分
+    for msg in messages:
         content = msg.get("content", "")
+        if not content:
+            continue
+        
+        # 提取HR评分（格式：HR评分：85分）
+        hr_match = re.search(r'HR评分[：:]\s*(\d+)', content)
+        if hr_match and result["dimension_scores"]["hr_score"] is None:
+            result["dimension_scores"]["hr_score"] = int(hr_match.group(1))
+        
+        # 提取技术评分（格式：技术评分：90分）
+        tech_match = re.search(r'技术评分[：:]\s*(\d+)', content)
+        if tech_match and result["dimension_scores"]["technical_score"] is None:
+            result["dimension_scores"]["technical_score"] = int(tech_match.group(1))
+        
+        # 提取管理评分（格式：管理评分：80分）
+        mgr_match = re.search(r'管理评分[：:]\s*(\d+)', content)
+        if mgr_match and result["dimension_scores"]["manager_score"] is None:
+            result["dimension_scores"]["manager_score"] = int(mgr_match.group(1))
+        
+        # 提取综合评分（格式：综合评分：85分）
         if "综合评分" in content:
-            # 尝试提取分数
-            import re
             match = re.search(r'综合评分[：:]\s*(\d+)', content)
             if match:
                 result["comprehensive_score"] = int(match.group(1))
             result["summary"] = content[:500]
-            break
     
     return result
 
@@ -254,8 +303,9 @@ async def start_ai_screening(
     task_data = ScreeningTaskCreate(application_id=data.application_id)
     task = await screening_crud.create_task(db, obj_in=task_data)
     
-    # 更新状态为处理中
-    task.status = "processing"
+    # 更新状态为处理中（使用 running 与前端保持一致）
+    task.status = "running"
+    task.progress = 5
     await db.commit()
     
     # 后台运行筛选任务

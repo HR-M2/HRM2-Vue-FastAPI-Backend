@@ -68,22 +68,26 @@ class Application(BaseModel):
     screening_tasks: Mapped[List["ScreeningTask"]] = relationship(
         "ScreeningTask",
         back_populates="application",
-        lazy="selectin"
+        lazy="selectin",
+        cascade="all, delete-orphan"
     )
     video_analyses: Mapped[List["VideoAnalysis"]] = relationship(
         "VideoAnalysis",
         back_populates="application",
-        lazy="selectin"
+        lazy="selectin",
+        cascade="all, delete-orphan"
     )
     interview_sessions: Mapped[List["InterviewSession"]] = relationship(
         "InterviewSession",
         back_populates="application",
-        lazy="selectin"
+        lazy="selectin",
+        cascade="all, delete-orphan"
     )
     comprehensive_analyses: Mapped[List["ComprehensiveAnalysis"]] = relationship(
         "ComprehensiveAnalysis",
         back_populates="application",
-        lazy="selectin"
+        lazy="selectin",
+        cascade="all, delete-orphan"
     )
     
     def __repr__(self) -> str:

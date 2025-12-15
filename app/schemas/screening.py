@@ -42,3 +42,4 @@ class ScreeningTaskResponse(TimestampSchema):
     # 关联信息
     candidate_name: Optional[str] = None
     position_title: Optional[str] = None
+    resume_content: Optional[str] = None

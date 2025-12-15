@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.screening import ScreeningTask
+from app.models.application import Application
 from app.schemas.screening import ScreeningTaskCreate, ScreeningResultUpdate
 from .base import CRUDBase
 
@@ -24,9 +25,9 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
             select(self.model)
             .options(
                 selectinload(self.model.application)
-                .selectinload("position"),
+                .selectinload(Application.position),
                 selectinload(self.model.application)
-                .selectinload("resume"),
+                .selectinload(Application.resume),
             )
             .where(self.model.id == id)
         )
@@ -80,6 +81,29 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
             .offset(skip)
             .limit(limit)
         )
+        return list(result.scalars().all())
+    
+    async def get_list_with_details(
+        self,
+        db: AsyncSession,
+        *,
+        status: str = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[ScreeningTask]:
+        """获取任务列表（包含关联的申请、简历、岗位信息）"""
+        query = select(self.model).options(
+            selectinload(self.model.application)
+            .selectinload(Application.resume),
+            selectinload(self.model.application)
+            .selectinload(Application.position),
+        )
+        
+        if status:
+            query = query.where(self.model.status == status)
+        
+        query = query.order_by(self.model.created_at.desc()).offset(skip).limit(limit)
+        result = await db.execute(query)
         return list(result.scalars().all())
     
     async def create_task(
