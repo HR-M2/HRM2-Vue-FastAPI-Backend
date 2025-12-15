@@ -43,17 +43,17 @@ class Position(BaseModel):
         default=list,
         comment="必备技能列表"
     )
-    preferred_skills: Mapped[Optional[list]] = mapped_column(
+    optional_skills: Mapped[Optional[list]] = mapped_column(
         JSON,
         default=list,
-        comment="优先技能列表"
+        comment="可选技能列表"
     )
     min_experience: Mapped[int] = mapped_column(
         Integer,
         default=0,
         comment="最低工作年限"
     )
-    education_requirements: Mapped[Optional[list]] = mapped_column(
+    education: Mapped[Optional[list]] = mapped_column(
         JSON,
         default=list,
         comment="学历要求"
