@@ -3,7 +3,9 @@
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from urllib.parse import quote
 
 from app.core.database import get_db
 from app.core.response import success_response, paged_response
@@ -157,3 +159,34 @@ async def delete_screening_task(
     
     await screening_crud.delete(db, id=task_id)
     return success_response(message="筛选任务删除成功")
+
+
+@router.get("/{task_id}/download", summary="下载筛选报告")
+async def download_screening_report(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    下载筛选报告（Markdown 格式）
+    """
+    task = await screening_crud.get_with_application(db, task_id)
+    if not task:
+        raise NotFoundException(f"筛选任务不存在: {task_id}")
+    
+    if not task.report_content:
+        raise NotFoundException("该任务暂无报告内容")
+    
+    # 构建文件名
+    candidate_name = "候选人"
+    if task.application and task.application.resume:
+        candidate_name = task.application.resume.candidate_name or "候选人"
+    filename = f"{candidate_name}_筛选报告.md"
+    
+    # 返回文件响应
+    return Response(
+        content=task.report_content.encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"
+        }
+    )

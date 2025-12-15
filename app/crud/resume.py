@@ -84,6 +84,37 @@ class CRUDResume(CRUDBase[Resume]):
         """检查文件哈希是否已存在"""
         resume = await self.get_by_hash(db, file_hash)
         return resume is not None
+    
+    async def check_hashes_batch(
+        self,
+        db: AsyncSession,
+        file_hashes: List[str]
+    ) -> dict:
+        """批量检查文件哈希是否已存在"""
+        result = await db.execute(
+            select(self.model.file_hash)
+            .where(self.model.file_hash.in_(file_hashes))
+        )
+        existing_hashes = set(result.scalars().all())
+        return {
+            h: h in existing_hashes
+            for h in file_hashes
+        }
+    
+    async def delete_batch(
+        self,
+        db: AsyncSession,
+        ids: List[str]
+    ) -> int:
+        """批量删除简历，返回删除数量"""
+        count = 0
+        for id in ids:
+            resume = await self.get(db, id)
+            if resume:
+                await db.delete(resume)
+                count += 1
+        await db.commit()
+        return count
 
 
 resume_crud = CRUDResume(Resume)

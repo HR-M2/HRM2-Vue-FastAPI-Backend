@@ -1,8 +1,9 @@
 """
 简历管理 API 路由
 """
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -133,3 +134,51 @@ async def delete_resume(
     
     await resume_crud.delete(db, id=resume_id)
     return success_response(message="简历删除成功")
+
+
+# ========== 批量操作 ==========
+
+class BatchDeleteRequest(BaseModel):
+    """批量删除请求"""
+    resume_ids: List[str] = Field(..., min_length=1, description="简历ID列表")
+
+
+class CheckHashesRequest(BaseModel):
+    """批量哈希检查请求"""
+    hashes: List[str] = Field(..., min_length=1, description="哈希值列表")
+
+
+@router.post("/batch-delete", summary="批量删除简历")
+async def batch_delete_resumes(
+    data: BatchDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    批量删除简历
+    """
+    deleted_count = await resume_crud.delete_batch(db, data.resume_ids)
+    return success_response(
+        data={
+            "deleted_count": deleted_count,
+            "requested_count": len(data.resume_ids)
+        },
+        message=f"成功删除 {deleted_count} 份简历"
+    )
+
+
+@router.post("/check-hashes", summary="批量检查哈希")
+async def check_hashes(
+    data: CheckHashesRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    批量检查文件哈希是否已存在（去重用）
+    """
+    exists_map = await resume_crud.check_hashes_batch(db, data.hashes)
+    existing_count = sum(1 for v in exists_map.values() if v)
+    return success_response(
+        data={
+            "exists": exists_map,
+            "existing_count": existing_count
+        }
+    )
