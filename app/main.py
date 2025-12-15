@@ -5,6 +5,7 @@ HRM2 企业招聘管理系统后端
 """
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
+from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from loguru import logger
@@ -20,6 +21,15 @@ from app.core.exceptions import (
     general_exception_handler,
 )
 from app.api import api_router
+
+
+def custom_generate_unique_id(route: APIRoute) -> str:
+    """
+    自定义 OpenAPI operationId 生成函数
+    
+    使用路由函数名作为 operationId，生成更简短的 API 名称
+    """
+    return route.name
 
 
 @asynccontextmanager
@@ -56,6 +66,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.debug else None,
         openapi_url="/openapi.json" if settings.debug else None,
         lifespan=lifespan,
+        generate_unique_id_function=custom_generate_unique_id,
     )
     
     # 配置 CORS
