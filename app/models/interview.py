@@ -109,15 +109,24 @@ class InterviewSession(BaseModel):
         evaluation: str = None
     ) -> None:
         """添加问答记录"""
+        from sqlalchemy.orm.attributes import flag_modified
+        
         if self.qa_records is None:
             self.qa_records = []
-        self.qa_records.append({
-            "round": len(self.qa_records) + 1,
+        
+        # 创建新列表以确保 SQLAlchemy 检测到变化
+        new_records = list(self.qa_records)
+        new_records.append({
+            "round": len(new_records) + 1,
             "question": question,
             "answer": answer,
             "score": score,
             "evaluation": evaluation
         })
+        self.qa_records = new_records
+        
+        # 显式标记字段已修改
+        flag_modified(self, "qa_records")
     
     def __repr__(self) -> str:
         return f"<InterviewSession(id={self.id}, rounds={self.current_round})>"
