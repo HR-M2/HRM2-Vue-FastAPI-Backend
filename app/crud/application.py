@@ -25,10 +25,10 @@ class CRUDApplication(CRUDBase[Application]):
             .options(
                 selectinload(self.model.position),
                 selectinload(self.model.resume),
-                selectinload(self.model.screening_tasks),
-                selectinload(self.model.video_analyses),
-                selectinload(self.model.interview_sessions),
-                selectinload(self.model.comprehensive_analyses),
+                selectinload(self.model.screening_task),
+                selectinload(self.model.video_analysis),
+                selectinload(self.model.interview_session),
+                selectinload(self.model.comprehensive_analysis),
             )
             .where(self.model.id == id, self.model.is_deleted == False)
         )

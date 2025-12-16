@@ -22,10 +22,6 @@ from app.schemas.application import (
     ApplicationResponse,
     ApplicationListResponse,
     ApplicationDetailResponse,
-    ScreeningTaskBrief,
-    VideoAnalysisBrief,
-    InterviewSessionBrief,
-    ComprehensiveAnalysisBrief,
 )
 
 router = APIRouter()
@@ -134,45 +130,6 @@ async def get_application(
     if application.resume:
         response.candidate_name = application.resume.candidate_name
     
-    # 添加关联数据简要信息
-    response.screening_tasks = [
-        ScreeningTaskBrief(
-            id=t.id,
-            status=t.status,
-            score=t.score,
-            recommendation=t.recommendation,
-            created_at=t.created_at
-        ) for t in application.screening_tasks
-    ]
-    
-    response.video_analyses = [
-        VideoAnalysisBrief(
-            id=v.id,
-            video_name=v.video_name,
-            status=v.status,
-            created_at=v.created_at
-        ) for v in application.video_analyses
-    ]
-    
-    response.interview_sessions = [
-        InterviewSessionBrief(
-            id=i.id,
-            interview_type=i.interview_type,
-            is_completed=i.is_completed,
-            final_score=i.final_score,
-            current_round=i.current_round,
-            created_at=i.created_at
-        ) for i in application.interview_sessions
-    ]
-    
-    response.comprehensive_analyses = [
-        ComprehensiveAnalysisBrief(
-            id=a.id,
-            final_score=a.final_score,
-            recommendation_level=a.recommendation_level,
-            created_at=a.created_at
-        ) for a in application.comprehensive_analyses
-    ]
     
     return success_response(data=response.model_dump())
 

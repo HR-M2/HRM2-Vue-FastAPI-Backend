@@ -557,24 +557,22 @@ async def ai_comprehensive_analysis(
     if application.position:
         job_config = {"title": application.position.title}
     
-    # 获取筛选报告
+    # 获取筛选报告 (1:1 关系)
     screening_report = {}
-    screening_tasks = await screening_crud.get_by_application(db, data.application_id)
-    if screening_tasks:
-        latest_task = screening_tasks[0]
+    screening_task = await screening_crud.get_by_application(db, data.application_id)
+    if screening_task:
         screening_report = {
-            "comprehensive_score": latest_task.comprehensive_score,
-            "summary": latest_task.screening_summary,
+            "comprehensive_score": screening_task.score,
+            "summary": screening_task.summary,
         }
     
-    # 获取面试记录
+    # 获取面试记录 (1:1 关系)
     interview_records = []
     interview_report = {}
-    interview_sessions = await interview_crud.get_by_application(db, data.application_id)
-    if interview_sessions:
-        latest_session = interview_sessions[0]
-        interview_records = latest_session.qa_records or []
-        interview_report = latest_session.report or {}
+    interview_session = await interview_crud.get_by_application(db, data.application_id)
+    if interview_session:
+        interview_records = interview_session.qa_records or []
+        interview_report = interview_session.report or {}
     
     # 执行综合分析
     analyzer = CandidateComprehensiveAnalyzer(job_config)

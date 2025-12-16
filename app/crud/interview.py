@@ -1,7 +1,7 @@
 """
 面试会话 CRUD 操作
 """
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -35,35 +35,12 @@ class CRUDInterview(CRUDBase[InterviewSession]):
     async def get_by_application(
         self,
         db: AsyncSession,
-        application_id: str,
-        *,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[InterviewSession]:
-        """获取某申请的所有面试会话"""
+        application_id: str
+    ) -> Optional[InterviewSession]:
+        """获取某申请的面试会话（1:1关系）"""
         result = await db.execute(
             select(self.model)
             .where(self.model.application_id == application_id)
-            .order_by(self.model.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        return list(result.scalars().all())
-    
-    async def get_active_session(
-        self,
-        db: AsyncSession,
-        application_id: str
-    ) -> Optional[InterviewSession]:
-        """获取某申请的进行中会话"""
-        result = await db.execute(
-            select(self.model)
-            .where(
-                self.model.application_id == application_id,
-                self.model.is_completed == False
-            )
-            .order_by(self.model.created_at.desc())
-            .limit(1)
         )
         return result.scalar_one_or_none()
     

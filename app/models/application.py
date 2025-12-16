@@ -4,7 +4,7 @@
 Application 是整个系统的核心表，连接岗位和简历，
 并作为所有分析任务的关联主体
 """
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 from sqlalchemy import String, Text, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,10 +26,10 @@ class Application(BaseModel):
     关联关系:
     - N:1 -> Position (一个岗位有多个申请)
     - N:1 -> Resume (一份简历可投多个岗位)
-    - 1:N -> ScreeningTask (筛选任务)
-    - 1:N -> VideoAnalysis (视频分析)
-    - 1:N -> InterviewSession (面试会话)
-    - 1:N -> ComprehensiveAnalysis (综合分析)
+    - 1:1 -> ScreeningTask (筛选任务)
+    - 1:1 -> VideoAnalysis (视频分析)
+    - 1:1 -> InterviewSession (面试会话)
+    - 1:1 -> ComprehensiveAnalysis (综合分析)
     """
     __tablename__ = "applications"
     
@@ -74,27 +74,31 @@ class Application(BaseModel):
         "Resume",
         back_populates="applications"
     )
-    screening_tasks: Mapped[List["ScreeningTask"]] = relationship(
+    screening_task: Mapped[Optional["ScreeningTask"]] = relationship(
         "ScreeningTask",
         back_populates="application",
+        uselist=False,
         lazy="selectin",
         cascade="all, delete-orphan"
     )
-    video_analyses: Mapped[List["VideoAnalysis"]] = relationship(
+    video_analysis: Mapped[Optional["VideoAnalysis"]] = relationship(
         "VideoAnalysis",
         back_populates="application",
+        uselist=False,
         lazy="selectin",
         cascade="all, delete-orphan"
     )
-    interview_sessions: Mapped[List["InterviewSession"]] = relationship(
+    interview_session: Mapped[Optional["InterviewSession"]] = relationship(
         "InterviewSession",
         back_populates="application",
+        uselist=False,
         lazy="selectin",
         cascade="all, delete-orphan"
     )
-    comprehensive_analyses: Mapped[List["ComprehensiveAnalysis"]] = relationship(
+    comprehensive_analysis: Mapped[Optional["ComprehensiveAnalysis"]] = relationship(
         "ComprehensiveAnalysis",
         back_populates="application",
+        uselist=False,
         lazy="selectin",
         cascade="all, delete-orphan"
     )

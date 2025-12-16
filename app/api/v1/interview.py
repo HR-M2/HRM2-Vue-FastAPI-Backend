@@ -41,9 +41,9 @@ async def get_interview_sessions(
     skip = (page - 1) * page_size
     
     if application_id:
-        sessions = await interview_crud.get_by_application(
-            db, application_id, skip=skip, limit=page_size
-        )
+        # 1:1 关系，直接获取单个会话
+        session = await interview_crud.get_by_application(db, application_id)
+        sessions = [session] if session else []
     else:
         sessions = await interview_crud.get_multi(db, skip=skip, limit=page_size)
     
@@ -72,10 +72,10 @@ async def create_interview_session(
     if not application:
         raise NotFoundException(f"应聘申请不存在: {data.application_id}")
     
-    # 检查是否有进行中的会话
-    active_session = await interview_crud.get_active_session(db, data.application_id)
-    if active_session:
-        raise BadRequestException("该申请已有进行中的面试会话")
+    # 1:1 关系，检查是否已存在会话
+    existing_session = await interview_crud.get_by_application(db, data.application_id)
+    if existing_session:
+        raise BadRequestException("该申请已有面试会话")
     
     session = await interview_crud.create_session(db, obj_in=data)
     

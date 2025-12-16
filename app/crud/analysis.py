@@ -1,7 +1,7 @@
 """
 综合分析 CRUD 操作
 """
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -35,32 +35,12 @@ class CRUDAnalysis(CRUDBase[ComprehensiveAnalysis]):
     async def get_by_application(
         self,
         db: AsyncSession,
-        application_id: str,
-        *,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[ComprehensiveAnalysis]:
-        """获取某申请的所有综合分析"""
-        result = await db.execute(
-            select(self.model)
-            .where(self.model.application_id == application_id)
-            .order_by(self.model.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        return list(result.scalars().all())
-    
-    async def get_latest_by_application(
-        self,
-        db: AsyncSession,
         application_id: str
     ) -> Optional[ComprehensiveAnalysis]:
-        """获取某申请的最新综合分析"""
+        """获取某申请的综合分析（1:1关系）"""
         result = await db.execute(
             select(self.model)
             .where(self.model.application_id == application_id)
-            .order_by(self.model.created_at.desc())
-            .limit(1)
         )
         return result.scalar_one_or_none()
     
@@ -71,7 +51,7 @@ class CRUDAnalysis(CRUDBase[ComprehensiveAnalysis]):
         *,
         skip: int = 0,
         limit: int = 100
-    ) -> List[ComprehensiveAnalysis]:
+    ) -> list[ComprehensiveAnalysis]:
         """获取某推荐等级的所有分析"""
         result = await db.execute(
             select(self.model)

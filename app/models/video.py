@@ -2,7 +2,7 @@
 视频分析模型模块
 """
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import String, Text, Integer, Float, ForeignKey, JSON
+from sqlalchemy import String, Text, Integer, Float, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseModel
@@ -19,12 +19,16 @@ class VideoAnalysis(BaseModel):
     存储面试视频分析的过程和结果（大五人格等）
     """
     __tablename__ = "video_analyses"
+    __table_args__ = (
+        UniqueConstraint('application_id', name='uq_video_analysis_application'),
+    )
     
     # ========== 外键关联 ==========
     application_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("applications.id", ondelete="CASCADE"),
         nullable=False,
+        unique=True,
         index=True,
         comment="应聘申请ID"
     )
@@ -116,7 +120,7 @@ class VideoAnalysis(BaseModel):
     # ========== 关联关系 ==========
     application: Mapped["Application"] = relationship(
         "Application",
-        back_populates="video_analyses"
+        back_populates="video_analysis"
     )
     
     @property

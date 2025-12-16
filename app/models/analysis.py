@@ -3,7 +3,7 @@
 """
 from typing import TYPE_CHECKING, Optional
 from enum import Enum
-from sqlalchemy import String, Text, Float, ForeignKey, JSON
+from sqlalchemy import String, Text, Float, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseModel
@@ -28,12 +28,16 @@ class ComprehensiveAnalysis(BaseModel):
     基于 Rubric 量表进行多维度评估
     """
     __tablename__ = "comprehensive_analyses"
+    __table_args__ = (
+        UniqueConstraint('application_id', name='uq_comprehensive_analysis_application'),
+    )
     
     # ========== 外键关联 ==========
     application_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("applications.id", ondelete="CASCADE"),
         nullable=False,
+        unique=True,
         index=True,
         comment="应聘申请ID"
     )
@@ -86,7 +90,7 @@ class ComprehensiveAnalysis(BaseModel):
     # ========== 关联关系 ==========
     application: Mapped["Application"] = relationship(
         "Application",
-        back_populates="comprehensive_analyses"
+        back_populates="comprehensive_analysis"
     )
     
     def __repr__(self) -> str:

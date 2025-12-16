@@ -40,9 +40,9 @@ async def get_analyses(
     skip = (page - 1) * page_size
     
     if application_id:
-        analyses = await analysis_crud.get_by_application(
-            db, application_id, skip=skip, limit=page_size
-        )
+        # 1:1 关系，直接获取单个分析
+        analysis = await analysis_crud.get_by_application(db, application_id)
+        analyses = [analysis] if analysis else []
     elif recommendation_level:
         analyses = await analysis_crud.get_by_recommendation(
             db, recommendation_level, skip=skip, limit=page_size

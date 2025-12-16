@@ -1,7 +1,7 @@
 """
 视频分析 CRUD 操作
 """
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -35,20 +35,14 @@ class CRUDVideo(CRUDBase[VideoAnalysis]):
     async def get_by_application(
         self,
         db: AsyncSession,
-        application_id: str,
-        *,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[VideoAnalysis]:
-        """获取某申请的所有视频分析"""
+        application_id: str
+    ) -> Optional[VideoAnalysis]:
+        """获取某申请的视频分析（1:1关系）"""
         result = await db.execute(
             select(self.model)
             .where(self.model.application_id == application_id)
-            .order_by(self.model.created_at.desc())
-            .offset(skip)
-            .limit(limit)
         )
-        return list(result.scalars().all())
+        return result.scalar_one_or_none()
     
     async def get_by_status(
         self,
@@ -57,7 +51,7 @@ class CRUDVideo(CRUDBase[VideoAnalysis]):
         *,
         skip: int = 0,
         limit: int = 100
-    ) -> List[VideoAnalysis]:
+    ) -> list[VideoAnalysis]:
         """获取某状态的所有视频分析"""
         result = await db.execute(
             select(self.model)

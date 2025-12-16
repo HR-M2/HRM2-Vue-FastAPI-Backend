@@ -42,9 +42,9 @@ async def get_screening_tasks(
     skip = (page - 1) * page_size
     
     if application_id:
-        tasks = await screening_crud.get_by_application(
-            db, application_id, skip=skip, limit=page_size
-        )
+        # 1:1 关系，直接获取单个任务
+        task = await screening_crud.get_by_application(db, application_id)
+        tasks = [task] if task else []
     elif status:
         tasks = await screening_crud.get_list_with_details(
             db, status=status, skip=skip, limit=page_size

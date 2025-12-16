@@ -1,7 +1,7 @@
 """
 应聘申请相关 Schema
 """
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from pydantic import Field
 
@@ -95,7 +95,7 @@ class ApplicationDetailResponse(ApplicationResponse):
     
     position: Optional[PositionListResponse] = None
     resume: Optional[ResumeListResponse] = None
-    screening_tasks: List[ScreeningTaskBrief] = []
-    video_analyses: List[VideoAnalysisBrief] = []
-    interview_sessions: List[InterviewSessionBrief] = []
-    comprehensive_analyses: List[ComprehensiveAnalysisBrief] = []
+    screening_task: Optional[ScreeningTaskBrief] = None
+    video_analysis: Optional[VideoAnalysisBrief] = None
+    interview_session: Optional[InterviewSessionBrief] = None
+    comprehensive_analysis: Optional[ComprehensiveAnalysisBrief] = None

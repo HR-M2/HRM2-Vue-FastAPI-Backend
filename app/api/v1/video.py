@@ -40,9 +40,9 @@ async def get_video_analyses(
     skip = (page - 1) * page_size
     
     if application_id:
-        videos = await video_crud.get_by_application(
-            db, application_id, skip=skip, limit=page_size
-        )
+        # 1:1 关系，直接获取单个分析
+        video = await video_crud.get_by_application(db, application_id)
+        videos = [video] if video else []
     elif status:
         videos = await video_crud.get_by_status(
             db, status, skip=skip, limit=page_size

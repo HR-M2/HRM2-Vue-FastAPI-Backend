@@ -1,7 +1,7 @@
 """
 筛选任务 CRUD 操作
 """
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -36,32 +36,12 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
     async def get_by_application(
         self,
         db: AsyncSession,
-        application_id: str,
-        *,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[ScreeningTask]:
-        """获取某申请的所有筛选任务"""
-        result = await db.execute(
-            select(self.model)
-            .where(self.model.application_id == application_id)
-            .order_by(self.model.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        return list(result.scalars().all())
-    
-    async def get_latest_by_application(
-        self,
-        db: AsyncSession,
         application_id: str
     ) -> Optional[ScreeningTask]:
-        """获取某申请的最新筛选任务"""
+        """获取某申请的筛选任务（1:1关系）"""
         result = await db.execute(
             select(self.model)
             .where(self.model.application_id == application_id)
-            .order_by(self.model.created_at.desc())
-            .limit(1)
         )
         return result.scalar_one_or_none()
     
@@ -72,7 +52,7 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
         *,
         skip: int = 0,
         limit: int = 100
-    ) -> List[ScreeningTask]:
+    ) -> list[ScreeningTask]:
         """获取某状态的所有任务"""
         result = await db.execute(
             select(self.model)
@@ -90,7 +70,7 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
         status: str = None,
         skip: int = 0,
         limit: int = 100
-    ) -> List[ScreeningTask]:
+    ) -> list[ScreeningTask]:
         """获取任务列表（包含关联的申请、简历、岗位信息）"""
         query = select(self.model).options(
             selectinload(self.model.application)

@@ -2,7 +2,7 @@
 面试会话模型模块
 """
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import String, Text, ForeignKey, JSON
+from sqlalchemy import String, Text, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseModel
@@ -30,12 +30,16 @@ class InterviewSession(BaseModel):
     ]
     """
     __tablename__ = "interview_sessions"
+    __table_args__ = (
+        UniqueConstraint('application_id', name='uq_interview_session_application'),
+    )
     
     # ========== 外键关联 ==========
     application_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("applications.id", ondelete="CASCADE"),
         nullable=False,
+        unique=True,
         index=True,
         comment="应聘申请ID"
     )
@@ -89,7 +93,7 @@ class InterviewSession(BaseModel):
     # ========== 关联关系 ==========
     application: Mapped["Application"] = relationship(
         "Application",
-        back_populates="interview_sessions"
+        back_populates="interview_session"
     )
     
     @property
