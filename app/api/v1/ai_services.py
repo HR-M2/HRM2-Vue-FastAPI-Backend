@@ -31,6 +31,7 @@ from app.services.agents import (
     CandidateComprehensiveAnalyzer,
     DevToolsService,
     get_dev_tools_service,
+    get_task_limiter,
 )
 
 router = APIRouter()
@@ -150,6 +151,9 @@ async def run_screening_task(
     engine = create_async_engine(db_url)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
+    # 获取任务并发限制器
+    task_limiter = get_task_limiter()
+    
     async def update_status(status: str):
         """更新任务状态到数据库"""
         async with async_session() as session:
@@ -159,6 +163,13 @@ async def run_screening_task(
                 await session.commit()
     
     try:
+        # 等待获取任务槽位（并发控制）
+        progress_cache.update(task_id, progress=2, current_speaker="等待排队")
+        loop = asyncio.get_event_loop()
+        acquired = await loop.run_in_executor(None, task_limiter.wait_and_acquire, 300.0)
+        if not acquired:
+            raise RuntimeError("任务排队超时，请稍后重试")
+        
         # 初始化进度缓存
         progress_cache.update(task_id, progress=5, current_speaker="初始化")
         
@@ -198,6 +209,8 @@ async def run_screening_task(
                 task.error_message = str(e)
                 await session.commit()
     finally:
+        # 释放任务槽位
+        task_limiter.release()
         # 清理进度缓存
         progress_cache.remove(task_id)
         await engine.dispose()

@@ -14,6 +14,8 @@ from .agents import (
     # LLM 客户端（新）
     LLMClient,
     get_llm_client,
+    TaskConcurrencyLimiter,
+    get_task_limiter,
     # LLM 配置（兼容）
     get_llm_config,
     get_config_list,

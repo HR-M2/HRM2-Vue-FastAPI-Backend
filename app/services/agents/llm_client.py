@@ -301,3 +301,82 @@ class LLMClient:
 def get_llm_client() -> LLMClient:
     """获取 LLMClient 单例实例"""
     return LLMClient()
+
+
+class TaskConcurrencyLimiter:
+    """
+    任务级别的并发限制器。
+    
+    用于限制同时运行的后台任务数量（如简历筛选任务）。
+    这些任务使用 autogen 框架，绕过了 LLMClient 的并发控制。
+    """
+    
+    _instance: Optional['TaskConcurrencyLimiter'] = None
+    _lock = Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        
+        self._max_tasks = settings.llm_max_concurrency
+        self._current_tasks = 0
+        self._task_lock = Lock()
+        self._initialized = True
+        logger.info(f"TaskConcurrencyLimiter initialized: max_tasks={self._max_tasks}")
+    
+    def acquire(self) -> bool:
+        """尝试获取任务槽位，返回是否成功"""
+        with self._task_lock:
+            if self._current_tasks < self._max_tasks:
+                self._current_tasks += 1
+                logger.debug(f"Task slot acquired: {self._current_tasks}/{self._max_tasks}")
+                return True
+            return False
+    
+    def wait_and_acquire(self, timeout: float = 300.0) -> bool:
+        """
+        等待并获取任务槽位。
+        
+        参数:
+            timeout: 最大等待时间（秒），默认 5 分钟
+            
+        返回:
+            是否成功获取
+        """
+        start_time = time.time()
+        while True:
+            if self.acquire():
+                return True
+            if time.time() - start_time > timeout:
+                logger.warning(f"Task slot acquisition timeout after {timeout}s")
+                return False
+            time.sleep(0.5)
+    
+    def release(self):
+        """释放任务槽位"""
+        with self._task_lock:
+            if self._current_tasks > 0:
+                self._current_tasks -= 1
+                logger.debug(f"Task slot released: {self._current_tasks}/{self._max_tasks}")
+    
+    def get_status(self) -> Dict[str, Any]:
+        """获取当前状态"""
+        with self._task_lock:
+            return {
+                "max_tasks": self._max_tasks,
+                "current_tasks": self._current_tasks,
+                "available_slots": self._max_tasks - self._current_tasks
+            }
+
+
+def get_task_limiter() -> TaskConcurrencyLimiter:
+    """获取任务并发限制器单例"""
+    return TaskConcurrencyLimiter()
