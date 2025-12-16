@@ -17,7 +17,6 @@ class ScreeningResultUpdate(BaseSchema):
     """更新筛选结果请求"""
     
     status: Optional[str] = Field(None, description="任务状态")
-    progress: Optional[int] = Field(None, ge=0, le=100, description="进度")
     score: Optional[float] = Field(None, ge=0, le=100, description="综合评分")
     dimension_scores: Optional[Dict] = Field(None, description="各维度评分")
     summary: Optional[str] = Field(None, description="筛选总结")
@@ -31,7 +30,6 @@ class ScreeningTaskResponse(TimestampSchema):
     
     application_id: str
     status: str
-    progress: int
     score: Optional[float]
     dimension_scores: Optional[Dict]
     summary: Optional[str]

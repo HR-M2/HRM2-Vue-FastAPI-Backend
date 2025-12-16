@@ -3,7 +3,7 @@
 """
 from typing import TYPE_CHECKING, Optional
 from enum import Enum
-from sqlalchemy import String, Text, Integer, Float, ForeignKey, JSON
+from sqlalchemy import String, Text, Float, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseModel
@@ -43,11 +43,6 @@ class ScreeningTask(BaseModel):
         default=TaskStatus.PENDING.value,
         index=True,
         comment="任务状态"
-    )
-    progress: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        comment="进度百分比(0-100)"
     )
     error_message: Mapped[Optional[str]] = mapped_column(
         Text,

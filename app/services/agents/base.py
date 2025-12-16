@@ -5,6 +5,7 @@ import autogen
 from autogen import GroupChat, GroupChatManager
 from typing import List, Dict, Any, Callable, Optional
 from .llm_config import get_llm_config
+from app.core.progress_cache import progress_cache
 
 
 class BaseAgentManager:
@@ -16,13 +17,13 @@ class BaseAgentManager:
         self.agents = []
         self.group_chat = None
         self.manager = None
-        self.current_task = None
+        self.task_id: Optional[str] = None
         self.messages = []
         self.speakers = []
     
-    def set_task(self, task):
-        """设置当前任务以便进度跟踪。"""
-        self.current_task = task
+    def set_task_id(self, task_id: str):
+        """设置当前任务ID以便进度跟踪。"""
+        self.task_id = task_id
     
     def create_group_chat(
         self,
@@ -70,19 +71,18 @@ class BaseAgentManager:
     
     def update_task_speaker(self, speaker_name: str, step: int = None):
         """
-        更新任务的当前发言人信息。
+        更新任务的当前发言人信息（写入内存缓存）。
         
         参数:
             speaker_name: 当前发言的agent名称
             step: 当前步骤数（1-6），会自动转换为百分比进度
         """
-        if self.current_task:
-            self.current_task.current_speaker = speaker_name
-            if step is not None:
-                # 按agent总数计算百分比进度（0-100）
-                progress_percent = int((step / self.TOTAL_AGENTS) * 100)
-                self.current_task.progress = min(progress_percent, 99)  # 保留最后1%给完成状态
-            # 注意：FastAPI中可能需要不同的持久化方式，这里保留接口
+        if self.task_id:
+            progress_cache.update(
+                task_id=self.task_id,
+                current_speaker=speaker_name,
+                step=step
+            )
     
     def run_chat(self, initiator: autogen.Agent, message: str):
         """运行代理聊天。"""

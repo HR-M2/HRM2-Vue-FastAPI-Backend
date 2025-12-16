@@ -127,16 +127,24 @@ async def get_screening_status(
 ):
     """
     获取筛选任务状态（轮询用）
-    返回完整的任务状态信息供前端展示进度
+    进度从内存缓存读取，其他信息从数据库读取
     """
+    from app.core.progress_cache import progress_cache
+    
     task = await screening_crud.get(db, task_id)
     if not task:
         raise NotFoundException(f"筛选任务不存在: {task_id}")
     
+    # 从缓存获取实时进度
+    cached = progress_cache.get(task_id)
+    progress = cached.progress if cached else (100 if task.status == "completed" else 0)
+    current_speaker = cached.current_speaker if cached else ""
+    
     return success_response(data={
         "id": task.id,
         "status": task.status,
-        "progress": task.progress,
+        "progress": progress,
+        "current_speaker": current_speaker,
         "error_message": task.error_message,
         "score": task.score,
         "dimension_scores": task.dimension_scores,

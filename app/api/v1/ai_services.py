@@ -145,36 +145,31 @@ async def run_screening_task(
     """
     from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
     from sqlalchemy.orm import sessionmaker
+    from app.core.progress_cache import progress_cache
     
     engine = create_async_engine(db_url)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
-    async def update_progress(progress: int, status: str = "running"):
-        """更新任务进度"""
+    async def update_status(status: str):
+        """更新任务状态到数据库"""
         async with async_session() as session:
             task = await screening_crud.get(session, task_id)
             if task:
-                task.progress = progress
                 task.status = status
                 await session.commit()
     
     try:
-        # 更新进度：初始化
-        await update_progress(10)
+        # 初始化进度缓存
+        progress_cache.update(task_id, progress=5, current_speaker="初始化")
         
         # 创建筛选代理管理器
         manager = ScreeningAgentManager(criteria)
+        manager.set_task_id(task_id)  # 设置任务ID以便进度跟踪
         manager.setup()
         
-        # 更新进度：Agent 准备就绪
-        await update_progress(20)
-        
         # 运行筛选（这是同步操作，在线程池中运行）
+        # Agent 切换时会自动通过 progress_cache 更新进度
         loop = asyncio.get_event_loop()
-        
-        # 更新进度：开始筛选
-        await update_progress(30)
-        
         messages = await loop.run_in_executor(
             None,
             manager.run_screening,
@@ -182,21 +177,14 @@ async def run_screening_task(
             resume_content
         )
         
-        # 更新进度：筛选完成，解析结果
-        await update_progress(80)
-        
         # 解析结果
         result = _parse_screening_result(messages)
         
-        # 更新进度：保存结果
-        await update_progress(90)
-        
-        # 更新数据库
+        # 更新数据库（仅最终结果）
         async with async_session() as session:
             task = await screening_crud.get(session, task_id)
             if task:
                 task.status = "completed"
-                task.progress = 100
                 task.score = result.get("comprehensive_score", 0)
                 task.dimension_scores = result.get("dimension_scores")
                 task.summary = result.get("summary", "")
@@ -210,6 +198,8 @@ async def run_screening_task(
                 task.error_message = str(e)
                 await session.commit()
     finally:
+        # 清理进度缓存
+        progress_cache.remove(task_id)
         await engine.dispose()
 
 
