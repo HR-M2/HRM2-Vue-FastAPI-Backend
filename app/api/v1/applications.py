@@ -15,7 +15,7 @@ from app.core.response import (
     DictResponse,
 )
 from app.core.exceptions import NotFoundException, ConflictException
-from app.crud import application_crud, position_crud, resume_crud
+from app.crud import application_crud, position_crud, resume_crud, screening_crud, interview_crud, analysis_crud
 from app.schemas.application import (
     ApplicationCreate,
     ApplicationUpdate,
@@ -184,4 +184,12 @@ async def get_stats_overview(
     获取申请统计概览
     """
     total = await application_crud.count(db)
-    return success_response(data={"total": total})
+    screened = await screening_crud.count_by_status(db, "completed")
+    interviewed = await interview_crud.count_completed(db)
+    recommended = await analysis_crud.count(db)
+    return success_response(data={
+        "total": total,
+        "screened": screened,
+        "interviewed": interviewed,
+        "recommended": recommended
+    })

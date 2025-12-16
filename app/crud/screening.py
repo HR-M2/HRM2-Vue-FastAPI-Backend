@@ -2,7 +2,7 @@
 筛选任务 CRUD 操作
 """
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -62,6 +62,19 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
             .limit(limit)
         )
         return list(result.scalars().all())
+    
+    async def count_by_status(
+        self,
+        db: AsyncSession,
+        status: str
+    ) -> int:
+        """统计某状态的任务数量"""
+        result = await db.execute(
+            select(func.count())
+            .select_from(self.model)
+            .where(self.model.status == status)
+        )
+        return result.scalar() or 0
     
     async def get_list_with_details(
         self,

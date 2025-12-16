@@ -211,26 +211,3 @@ async def delete_analysis(
     
     await analysis_crud.delete(db, id=analysis_id)
     return success_response(message="综合分析删除成功")
-
-
-@router.get("/stats/recommendation", summary="获取推荐等级统计", response_model=DictResponse)
-async def get_recommendation_stats(
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    获取各推荐等级的数量统计
-    """
-    stats = {}
-    for level in RecommendationLevel:
-        analyses = await analysis_crud.get_by_recommendation(
-            db, level.value, skip=0, limit=1
-        )
-        # 简化处理，实际应该单独实现 count 方法
-        all_analyses = await analysis_crud.get_by_recommendation(
-            db, level.value, skip=0, limit=10000
-        )
-        stats[level.value] = len(all_analyses)
-    
-    stats["total"] = await analysis_crud.count(db)
-    
-    return success_response(data=stats)

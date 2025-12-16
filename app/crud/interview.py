@@ -2,7 +2,7 @@
 面试会话 CRUD 操作
 """
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -44,6 +44,18 @@ class CRUDInterview(CRUDBase[InterviewSession]):
             .where(self.model.application_id == application_id)
         )
         return result.scalar_one_or_none()
+    
+    async def count_completed(
+        self,
+        db: AsyncSession
+    ) -> int:
+        """统计已完成面试会话数量"""
+        result = await db.execute(
+            select(func.count())
+            .select_from(self.model)
+            .where(self.model.is_completed == True)
+        )
+        return result.scalar() or 0
     
     async def create_session(
         self,
