@@ -83,7 +83,8 @@ class Position(BaseModel):
     applications: Mapped[List["Application"]] = relationship(
         "Application",
         back_populates="position",
-        lazy="selectin"
+        lazy="selectin",
+        passive_deletes="all"  # 完全禁用ORM设置外键为NULL，让数据库CASCADE生效
     )
     
     def __repr__(self) -> str:

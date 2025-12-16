@@ -79,6 +79,7 @@ async def create_application(
 ):
     """
     创建新的应聘申请（简历投递岗位）
+    如果之前被软删除过，则恢复而非新建
     """
     # 验证岗位存在
     position = await position_crud.get(db, data.position_id)
@@ -90,11 +91,18 @@ async def create_application(
     if not resume:
         raise NotFoundException(f"简历不存在: {data.resume_id}")
     
-    # 检查是否已存在相同申请
+    # 检查是否已存在相同申请（未删除）
     if await application_crud.exists(db, data.position_id, data.resume_id):
         raise ConflictException("该简历已投递此岗位")
     
-    application = await application_crud.create_application(db, obj_in=data)
+    # 检查是否有被软删除的记录，如有则恢复
+    deleted_app = await application_crud.get_deleted(db, data.position_id, data.resume_id)
+    if deleted_app:
+        application = await application_crud.restore(db, db_obj=deleted_app)
+        message = "应聘申请已恢复"
+    else:
+        application = await application_crud.create_application(db, obj_in=data)
+        message = "应聘申请创建成功"
     
     response = ApplicationResponse.model_validate(application)
     response.position_title = position.title
@@ -102,7 +110,7 @@ async def create_application(
     
     return success_response(
         data=response.model_dump(),
-        message="应聘申请创建成功"
+        message=message
     )
 
 
@@ -198,13 +206,13 @@ async def delete_application(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    删除应聘申请（同时删除关联的筛选/分析数据）
+    删除应聘申请（软删除，保留关联的筛选/分析数据）
     """
     application = await application_crud.get(db, application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {application_id}")
     
-    await application_crud.delete(db, id=application_id)
+    await application_crud.soft_delete(db, id=application_id)
     return success_response(message="应聘申请删除成功")
 
 

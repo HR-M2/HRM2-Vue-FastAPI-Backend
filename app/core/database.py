@@ -4,6 +4,7 @@
 使用 SQLAlchemy 2.0 异步模式
 """
 from typing import AsyncGenerator
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
@@ -16,6 +17,15 @@ engine = create_async_engine(
     echo=settings.debug,  # 开发环境打印 SQL
     future=True,
 )
+
+
+# SQLite 启用外键约束（CASCADE 删除需要）
+@event.listens_for(engine.sync_engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """在每个连接建立时启用 SQLite 外键约束"""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 # 创建异步会话工厂
 AsyncSessionLocal = async_sessionmaker(

@@ -5,7 +5,7 @@ Application 是整个系统的核心表，连接岗位和简历，
 并作为所有分析任务的关联主体
 """
 from typing import TYPE_CHECKING, List, Optional
-from sqlalchemy import String, Text, ForeignKey
+from sqlalchemy import String, Text, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseModel
@@ -54,6 +54,15 @@ class Application(BaseModel):
         Text,
         nullable=True,
         comment="备注信息"
+    )
+    
+    # ========== 软删除标记 ==========
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+        comment="是否已删除（软删除）"
     )
     
     # ========== 关联关系 ==========
