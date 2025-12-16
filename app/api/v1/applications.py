@@ -63,6 +63,9 @@ async def get_applications(
             item.position_title = app.position.title
         if app.resume:
             item.candidate_name = app.resume.candidate_name
+        if app.screening_task:
+            from app.schemas.application import ScreeningTaskBrief
+            item.screening_task = ScreeningTaskBrief.model_validate(app.screening_task)
         items.append(item.model_dump())
     
     return paged_response(items, total, page, page_size)

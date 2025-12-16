@@ -48,6 +48,7 @@ class ApplicationListResponse(TimestampSchema):
     resume_id: str
     position_title: Optional[str] = None
     candidate_name: Optional[str] = None
+    screening_task: Optional["ScreeningTaskBrief"] = None
 
 
 class ScreeningTaskBrief(BaseSchema):

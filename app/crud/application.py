@@ -48,6 +48,7 @@ class CRUDApplication(CRUDBase[Application]):
             .options(
                 selectinload(self.model.position),
                 selectinload(self.model.resume),
+                selectinload(self.model.screening_task),
             )
             .where(self.model.position_id == position_id, self.model.is_deleted == False)
             .order_by(self.model.created_at.desc())
