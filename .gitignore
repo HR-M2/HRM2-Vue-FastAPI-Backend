@@ -17,10 +17,6 @@ ENV/
 # 环境变量
 .env
 
-# 数据库
-*.db
-*.sqlite3
-data/
 
 # 日志
 logs/
