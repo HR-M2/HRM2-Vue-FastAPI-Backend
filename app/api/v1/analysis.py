@@ -1,6 +1,7 @@
 """
 综合分析 API 路由
 """
+import asyncio
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,14 +15,15 @@ from app.core.response import (
     MessageResponse,
     DictResponse,
 )
-from app.core.exceptions import NotFoundException
-from app.crud import analysis_crud, application_crud
+from app.core.exceptions import NotFoundException, BadRequestException
+from app.crud import analysis_crud, application_crud, screening_crud, interview_crud
 from app.models.analysis import RecommendationLevel
 from app.schemas.analysis import (
     ComprehensiveAnalysisCreate,
     ComprehensiveAnalysisResponse,
     ComprehensiveAnalysisUpdate,
 )
+from app.services.agents import CandidateComprehensiveAnalyzer, validate_llm_config
 
 router = APIRouter()
 
@@ -66,37 +68,100 @@ async def create_analysis(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    为指定应聘申请创建综合分析
+    为指定应聘申请创建综合分析（支持重新分析）
     
-    注意: 实际分析逻辑需要在 services 层实现
+    调用 AI Agent 进行多维度评估，生成最终录用建议。
+    如果已有分析记录，会更新该记录。
     """
+    if not validate_llm_config():
+        raise BadRequestException("LLM服务未配置，请检查API Key")
+    
     # 验证应聘申请存在
     application = await application_crud.get_detail(db, data.application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {data.application_id}")
     
-    # TODO: 调用 AI 服务进行综合分析
-    # 这里使用占位数据
+    # 检查是否已有分析记录（用于重新分析）
+    existing_analysis = await analysis_crud.get_by_application(db, data.application_id)
+    
+    # 收集分析所需数据
+    resume_content = ""
+    candidate_name = "候选人"
+    job_config = {}
+    
+    if application.resume:
+        resume_content = application.resume.content or ""
+        candidate_name = application.resume.candidate_name
+    
+    if application.position:
+        job_config = {"title": application.position.title}
+    
+    # 获取筛选报告
+    screening_report = {}
+    screening_task = await screening_crud.get_by_application(db, data.application_id)
+    if screening_task:
+        screening_report = {
+            "comprehensive_score": screening_task.score,
+            "summary": screening_task.summary,
+        }
+    
+    # 获取面试记录
+    interview_records = []
+    interview_report = {}
+    interview_session = await interview_crud.get_by_application(db, data.application_id)
+    if interview_session:
+        interview_records = interview_session.qa_records or []
+        interview_report = interview_session.report or {}
+    
+    # 执行 AI 综合分析（在线程池中运行同步代码）
+    analyzer = CandidateComprehensiveAnalyzer(job_config)
+    loop = asyncio.get_event_loop()
+    ai_result = await loop.run_in_executor(
+        None,
+        lambda: analyzer.analyze(
+            candidate_name=candidate_name,
+            resume_content=resume_content,
+            screening_report=screening_report,
+            interview_records=interview_records,
+            interview_report=interview_report,
+        )
+    )
+    
+    # 映射 AI 结果到数据库字段
+    recommendation = ai_result.get("recommendation", {})
+    # 使用中文标签而不是英文标识符
+    recommendation_level = recommendation.get("label", "推荐录用")
+    
+    # 保留完整维度评分数据（包含优势、不足等详情）
+    dimension_scores = ai_result.get("dimension_scores", {})
+    
     analysis_result = {
-        "final_score": 75.0,
-        "recommendation_level": RecommendationLevel.RECOMMENDED.value,
-        "recommendation_reason": "综合表现良好",
-        "suggested_action": "建议进入下一轮面试",
-        "dimension_scores": {
-            "技能匹配": 80,
-            "经验匹配": 70,
-            "面试表现": 75,
-        },
-        "report": "# 综合分析报告\n\n待 AI 服务生成...",
+        "final_score": ai_result.get("final_score", 60.0),
+        "recommendation_level": recommendation_level,
+        "recommendation_reason": recommendation.get("label", ""),
+        "suggested_action": recommendation.get("action", ""),
+        "dimension_scores": dimension_scores,
+        "report": ai_result.get("comprehensive_report", ""),
         "input_snapshot": {
             "position": application.position.title if application.position else None,
-            "candidate": application.resume.candidate_name if application.resume else None,
+            "candidate": candidate_name,
         }
     }
     
-    analysis = await analysis_crud.create_analysis(
-        db, obj_in=data, analysis_result=analysis_result
-    )
+    # 根据是否已有记录决定创建或更新
+    if existing_analysis:
+        # 更新已有分析记录
+        update_data = ComprehensiveAnalysisUpdate(**analysis_result)
+        analysis = await analysis_crud.update_analysis(
+            db, db_obj=existing_analysis, obj_in=update_data
+        )
+        message = "综合分析已更新"
+    else:
+        # 创建新分析记录
+        analysis = await analysis_crud.create_analysis(
+            db, obj_in=data, analysis_result=analysis_result
+        )
+        message = "综合分析创建成功"
     
     response = ComprehensiveAnalysisResponse.model_validate(analysis)
     if application.resume:
@@ -106,7 +171,7 @@ async def create_analysis(
     
     return success_response(
         data=response.model_dump(),
-        message="综合分析创建成功"
+        message=message
     )
 
 
