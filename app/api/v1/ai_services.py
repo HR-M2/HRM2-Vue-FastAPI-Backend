@@ -256,7 +256,7 @@ def _parse_screening_result(messages: List[Dict]) -> Dict[str, Any]:
             match = re.search(r'综合评分[：:]\s*(\d+)', content)
             if match:
                 result["comprehensive_score"] = int(match.group(1))
-            result["summary"] = content[:500]
+            result["summary"] = content
     
     return result
 

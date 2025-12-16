@@ -426,7 +426,7 @@ class CandidateComprehensiveAnalyzer:
             dim_name = dim_data.get("dimension_name", dim_key)
             score = dim_data.get("dimension_score", 3)
             analysis = dim_data.get("analysis", "")
-            dimension_summary.append(f"- {dim_name}：{score}分 - {analysis[:100]}")
+            dimension_summary.append(f"- {dim_name}：{score}分 - {analysis}")
         
         user_prompt = f"""请为候选人【{candidate_name}】生成综合分析报告：
 
