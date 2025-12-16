@@ -72,10 +72,10 @@ async def create_interview_session(
     if not application:
         raise NotFoundException(f"应聘申请不存在: {data.application_id}")
     
-    # 1:1 关系，检查是否已存在会话
+    # 如已存在会话则先删除，每次开始新的面试
     existing_session = await interview_crud.get_by_application(db, data.application_id)
     if existing_session:
-        raise BadRequestException("该申请已有面试会话")
+        await interview_crud.delete(db, id=existing_session.id)
     
     session = await interview_crud.create_session(db, obj_in=data)
     
