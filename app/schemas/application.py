@@ -79,6 +79,7 @@ class InterviewSessionBrief(BaseSchema):
     is_completed: bool
     final_score: Optional[float]
     current_round: int = 0
+    has_report: bool = False
     created_at: datetime
 
 

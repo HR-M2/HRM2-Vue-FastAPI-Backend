@@ -101,6 +101,15 @@ class InterviewSession(BaseModel):
         """当前轮次"""
         return len(self.qa_records) if self.qa_records else 0
     
+    @property
+    def has_report(self) -> bool:
+        """是否已生成面试报告（非占位符）"""
+        if not self.report_markdown:
+            return False
+        # 检查是否为占位符报告
+        placeholder_markers = ["待 AI 服务生成", "面试报告占位"]
+        return not any(marker in self.report_markdown for marker in placeholder_markers)
+    
     def add_qa_record(
         self,
         question: str,
