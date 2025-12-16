@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.video import VideoAnalysis
+from app.models.application import Application
 from app.schemas.video import VideoAnalysisCreate, VideoResultUpdate
 from .base import CRUDBase
 
@@ -24,9 +25,9 @@ class CRUDVideo(CRUDBase[VideoAnalysis]):
             select(self.model)
             .options(
                 selectinload(self.model.application)
-                .selectinload("position"),
+                .selectinload(Application.position),
                 selectinload(self.model.application)
-                .selectinload("resume"),
+                .selectinload(Application.resume),
             )
             .where(self.model.id == id)
         )

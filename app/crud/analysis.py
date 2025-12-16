@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.analysis import ComprehensiveAnalysis
+from app.models.application import Application
 from app.schemas.analysis import ComprehensiveAnalysisCreate, ComprehensiveAnalysisUpdate
 from .base import CRUDBase
 
@@ -24,9 +25,9 @@ class CRUDAnalysis(CRUDBase[ComprehensiveAnalysis]):
             select(self.model)
             .options(
                 selectinload(self.model.application)
-                .selectinload("position"),
+                .selectinload(Application.position),
                 selectinload(self.model.application)
-                .selectinload("resume"),
+                .selectinload(Application.resume),
             )
             .where(self.model.id == id)
         )

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.interview import InterviewSession
+from app.models.application import Application
 from app.schemas.interview import InterviewSessionCreate, InterviewSessionUpdate
 from .base import CRUDBase
 
@@ -24,9 +25,9 @@ class CRUDInterview(CRUDBase[InterviewSession]):
             select(self.model)
             .options(
                 selectinload(self.model.application)
-                .selectinload("position"),
+                .selectinload(Application.position),
                 selectinload(self.model.application)
-                .selectinload("resume"),
+                .selectinload(Application.resume),
             )
             .where(self.model.id == id)
         )
