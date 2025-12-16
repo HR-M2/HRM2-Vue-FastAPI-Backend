@@ -69,15 +69,6 @@ def create_app() -> FastAPI:
         generate_unique_id_function=custom_generate_unique_id,
     )
     
-    # 配置 CORS
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    
     # 注册异常处理器
     app.add_exception_handler(AppException, app_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
@@ -102,6 +93,15 @@ def create_app() -> FastAPI:
             "version": "2.0.0",
             "docs": "/docs" if settings.debug else None,
         })
+    
+    # 配置 CORS（必须放在最后添加，这样它会最先执行）
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     
     return app
 

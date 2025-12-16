@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite+aiosqlite:///{BASE_DIR / 'data' / 'hrm2.db'}"
     
     # CORS 配置
-    cors_origins: List[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origins: List[str] = ["*"]
     
     # LLM 配置
     llm_model: str = "deepseek-chat"
