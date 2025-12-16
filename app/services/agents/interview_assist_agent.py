@@ -5,9 +5,8 @@
 import json
 import logging
 from typing import Dict, List, Any, Optional
-from openai import OpenAI
 
-from .llm_config import get_config_list
+from .llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -347,21 +346,7 @@ class InterviewAssistAgent:
             job_config: 职位配置
         """
         self.job_config = job_config or {}
-        
-        # 获取LLM配置
-        llm_config = get_config_list()[0]
-        self.api_key = llm_config.get('api_key', '')
-        self.base_url = llm_config.get('base_url', 'https://api.openai.com/v1')
-        self.model = llm_config.get('model', 'gpt-3.5-turbo')
-        self.temperature = llm_config.get('temperature', 0.7)
-        self.timeout = 120
-        
-        # 初始化OpenAI客户端
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            timeout=self.timeout
-        )
+        self._llm = get_llm_client()
     
     def _call_llm(self, system_prompt: str, user_prompt: str, temperature: float = None) -> Dict:
         """
@@ -375,45 +360,7 @@ class InterviewAssistAgent:
         返回:
             解析后的JSON字典
         """
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=temperature if temperature is not None else self.temperature,
-            )
-            
-            # 检查响应是否有效
-            if not response or not response.choices:
-                raise ValueError("LLM 返回空响应")
-            
-            content = response.choices[0].message.content
-            if content is None:
-                raise ValueError("LLM 返回内容为空")
-            
-            result_text = content.strip()
-            
-            # 清理markdown代码块标记
-            if result_text.startswith("```json"):
-                result_text = result_text[7:]
-            elif result_text.startswith("```"):
-                result_text = result_text[3:]
-            if result_text.endswith("```"):
-                result_text = result_text[:-3]
-            result_text = result_text.strip()
-            
-            # 解析JSON
-            return json.loads(result_text)
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response as JSON: {e}")
-            logger.error(f"Raw response: {result_text}")
-            raise ValueError(f"LLM返回的结果不是有效的JSON格式: {str(e)}")
-        except Exception as e:
-            logger.error(f"LLM call failed: {e}")
-            raise ValueError(f"LLM调用失败: {str(e)}")
+        return self._llm.complete_json(system_prompt, user_prompt, temperature=temperature)
     
     def generate_resume_based_questions(
         self,

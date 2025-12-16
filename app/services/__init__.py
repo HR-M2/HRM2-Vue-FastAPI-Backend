@@ -11,7 +11,10 @@ from .agents import (
     RUBRIC_SCALES,
     EVALUATION_DIMENSIONS,
     RECOMMENDATION_LEVELS,
-    # LLM配置
+    # LLM 客户端（新）
+    LLMClient,
+    get_llm_client,
+    # LLM 配置（兼容）
     get_llm_config,
     get_config_list,
     get_embedding_config,

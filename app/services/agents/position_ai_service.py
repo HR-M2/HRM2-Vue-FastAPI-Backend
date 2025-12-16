@@ -7,7 +7,8 @@ import logging
 from typing import Dict, Any, List, Optional
 from openai import OpenAI
 
-from .llm_config import get_config_list, get_embedding_config
+from .llm_client import get_llm_client
+from .llm_config import get_embedding_config
 
 logger = logging.getLogger(__name__)
 
@@ -34,25 +35,13 @@ class PositionAIService:
 """
     
     def __init__(self):
-        # 获取LLM配置
-        llm_config = get_config_list()[0]
-        self.api_key = llm_config.get('api_key', '')
-        self.base_url = llm_config.get('base_url', 'https://api.openai.com/v1')
-        self.model = llm_config.get('model', 'gpt-3.5-turbo')
-        self.temperature = llm_config.get('temperature', 0.7)
-        self.timeout = 120
+        self._llm = get_llm_client()
         
         # 获取Embedding配置
         embedding_config = get_embedding_config()
         self.embedding_api_key = embedding_config.get('api_key', '')
         self.embedding_base_url = embedding_config.get('base_url', '')
         self.embedding_model = embedding_config.get('model', '')
-        
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            timeout=self.timeout
-        )
     
     def generate_position_requirements(
         self, 
@@ -110,38 +99,15 @@ class PositionAIService:
 请直接输出JSON格式的岗位要求，不要包含任何其他内容。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                temperature=self.temperature,
-            )
-            
-            result_text = response.choices[0].message.content.strip()
-            
-            # 清理可能的markdown代码块标记
-            if result_text.startswith("```json"):
-                result_text = result_text[7:]
-            elif result_text.startswith("```"):
-                result_text = result_text[3:]
-            if result_text.endswith("```"):
-                result_text = result_text[:-3]
-            result_text = result_text.strip()
-            
-            # 解析JSON
-            position_data = json.loads(result_text)
+            position_data = self._llm.complete_json(system_prompt, user_message)
             
             # 验证必要字段
             self._validate_position_data(position_data)
             
             return position_data
             
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse AI response as JSON: {e}")
-            logger.error(f"Raw response: {result_text}")
-            raise ValueError(f"AI返回的结果不是有效的JSON格式: {str(e)}")
+        except ValueError:
+            raise
         except Exception as e:
             logger.error(f"AI generation failed: {e}")
             raise ValueError(f"AI生成失败: {str(e)}")
@@ -197,10 +163,11 @@ class PositionAIService:
             return []
         
         try:
+            from app.core.config import settings
             embedding_client = OpenAI(
                 api_key=self.embedding_api_key,
                 base_url=self.embedding_base_url,
-                timeout=self.timeout
+                timeout=settings.llm_timeout
             )
             
             response = embedding_client.embeddings.create(

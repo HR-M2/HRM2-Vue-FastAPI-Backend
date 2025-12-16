@@ -1,88 +1,39 @@
 """
-LLM配置管理模块。
-从环境变量加载API密钥和设置。
+LLM 配置兼容模块。
+
+此模块提供对旧 API 的兼容，所有功能委托给 LLMClient。
+新代码应直接使用 llm_client.py 中的 get_llm_client()。
 """
-import os
 from typing import Dict, List, Any
-from dotenv import load_dotenv
 
-# 加载环境变量
-load_dotenv()
-
-
-def get_config_list() -> List[Dict[str, Any]]:
-    """
-    从环境变量获取LLM配置列表。
-    
-    返回:
-        LLM配置字典列表。
-    """
-    return [
-        {
-            "model": os.getenv('LLM_MODEL', 'deepseek-ai/DeepSeek-V3'),
-            "api_key": os.getenv('LLM_API_KEY', ''),
-            "base_url": os.getenv('LLM_BASE_URL', 'https://api.siliconflow.cn/v1'),
-            "temperature": float(os.getenv('LLM_TEMPERATURE', '0')),
-        }
-    ]
+from .llm_client import get_llm_client
+from app.core.config import settings
 
 
 def get_llm_config() -> Dict[str, Any]:
-    """
-    获取autogen代理的LLM配置。
-    
-    返回:
-        autogen的配置字典。
-    """
-    return {
-        "config_list": get_config_list(),
-        "seed": 42,
-        "timeout": int(os.getenv('LLM_TIMEOUT', '120')),
-        "temperature": float(os.getenv('LLM_TEMPERATURE', '0')),
-    }
+    """获取 autogen 代理的 LLM 配置"""
+    return get_llm_client().get_autogen_config()
+
+
+def get_config_list() -> List[Dict[str, Any]]:
+    """获取 LLM 配置列表"""
+    return get_llm_client().get_autogen_config()["config_list"]
 
 
 def validate_llm_config() -> bool:
-    """
-    验证LLM配置是否正确设置。
-    
-    返回:
-        如果配置有效则返回True，否则返回False。
-    """
-    api_key = os.getenv('LLM_API_KEY', '')
-    if not api_key or api_key == 'your-api-key-here':
-        return False
-    return True
+    """验证 LLM 配置是否有效"""
+    return get_llm_client().is_configured()
 
 
 def get_llm_status() -> Dict[str, Any]:
-    """
-    获取当前 LLM配置状态。
-    
-    返回:
-        包含配置信息的状态字典。
-    """
-    config = get_config_list()[0]
-    return {
-        "model": config["model"],
-        "base_url": config["base_url"],
-        "api_key_configured": bool(config["api_key"]) and config["api_key"] != 'your-api-key-here',
-        "temperature": config["temperature"],
-    }
+    """获取当前 LLM 配置状态"""
+    return get_llm_client().get_status()
 
 
 def get_embedding_config() -> Dict[str, Any]:
-    """
-    获取Embedding模型配置。
-    
-    返回:
-        Embedding配置字典。
-    """
-    llm_api_key = os.getenv('LLM_API_KEY', '')
-    llm_base_url = os.getenv('LLM_BASE_URL', 'https://api.siliconflow.cn/v1')
-    
+    """获取 Embedding 模型配置"""
     return {
-        "model": os.getenv('EMBEDDING_MODEL', ''),
-        "api_key": os.getenv('EMBEDDING_API_KEY') or llm_api_key,
-        "base_url": os.getenv('EMBEDDING_BASE_URL') or llm_base_url,
+        "model": settings.embedding_model if hasattr(settings, 'embedding_model') else '',
+        "api_key": settings.embedding_api_key if hasattr(settings, 'embedding_api_key') else settings.llm_api_key,
+        "base_url": settings.embedding_base_url if hasattr(settings, 'embedding_base_url') else settings.llm_base_url,
     }

@@ -1,0 +1,303 @@
+"""
+统一的 LLM 客户端封装模块。
+
+提供带并发控制和速率限制的 LLM 调用接口。
+所有 LLM 调用都应通过此模块进行。
+"""
+import asyncio
+import json
+import logging
+import time
+from typing import Dict, List, Any, Optional
+from openai import OpenAI
+from threading import Lock
+
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class RateLimiter:
+    """简单的速率限制器（令牌桶算法）"""
+    
+    def __init__(self, rate: int):
+        """
+        参数:
+            rate: 每分钟允许的请求数
+        """
+        self.rate = rate
+        self.tokens = rate
+        self.last_update = time.time()
+        self._lock = Lock()
+    
+    def acquire(self) -> bool:
+        """尝试获取一个令牌，返回是否成功"""
+        with self._lock:
+            now = time.time()
+            elapsed = now - self.last_update
+            self.tokens = min(self.rate, self.tokens + elapsed * (self.rate / 60.0))
+            self.last_update = now
+            
+            if self.tokens >= 1:
+                self.tokens -= 1
+                return True
+            return False
+    
+    def wait_and_acquire(self):
+        """等待直到可以获取令牌"""
+        while not self.acquire():
+            time.sleep(0.1)
+
+
+class ConcurrencyLimiter:
+    """并发限制器"""
+    
+    def __init__(self, max_concurrency: int):
+        self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._sync_semaphore = None
+        self._max = max_concurrency
+        self._lock = Lock()
+        self._current = 0
+    
+    def acquire_sync(self):
+        """同步获取"""
+        with self._lock:
+            while self._current >= self._max:
+                self._lock.release()
+                time.sleep(0.05)
+                self._lock.acquire()
+            self._current += 1
+    
+    def release_sync(self):
+        """同步释放"""
+        with self._lock:
+            self._current -= 1
+    
+    async def acquire(self):
+        """异步获取"""
+        await self._semaphore.acquire()
+    
+    def release(self):
+        """异步释放"""
+        self._semaphore.release()
+
+
+class LLMClient:
+    """
+    统一的 LLM 客户端。
+    
+    提供:
+    - 并发控制
+    - 速率限制
+    - 统一的错误处理
+    - JSON 响应解析
+    """
+    
+    _instance: Optional['LLMClient'] = None
+    _lock = Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        
+        self.model = settings.llm_model
+        self.api_key = settings.llm_api_key
+        self.base_url = settings.llm_base_url
+        self.temperature = settings.llm_temperature
+        self.timeout = settings.llm_timeout
+        
+        self._client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=self.timeout
+        )
+        
+        self._rate_limiter = RateLimiter(settings.llm_rate_limit)
+        self._concurrency_limiter = ConcurrencyLimiter(settings.llm_max_concurrency)
+        
+        self._initialized = True
+        logger.info(
+            f"LLMClient initialized: model={self.model}, "
+            f"max_concurrency={settings.llm_max_concurrency}, "
+            f"rate_limit={settings.llm_rate_limit}/min"
+        )
+    
+    def chat(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> str:
+        """
+        发送聊天请求并返回文本响应。
+        
+        参数:
+            messages: 消息列表 [{"role": "system/user/assistant", "content": "..."}]
+            temperature: 温度参数（可选，默认使用配置值）
+            model: 模型名称（可选，默认使用配置值）
+            
+        返回:
+            LLM 响应的文本内容
+        """
+        self._rate_limiter.wait_and_acquire()
+        self._concurrency_limiter.acquire_sync()
+        
+        try:
+            response = self._client.chat.completions.create(
+                model=model or self.model,
+                messages=messages,
+                temperature=temperature if temperature is not None else self.temperature
+            )
+            
+            if not response or not response.choices:
+                raise ValueError("LLM 返回空响应")
+            
+            content = response.choices[0].message.content
+            if content is None:
+                raise ValueError("LLM 返回内容为空")
+            
+            return content.strip()
+            
+        except Exception as e:
+            logger.error(f"LLM 调用失败: {e}")
+            raise
+        finally:
+            self._concurrency_limiter.release_sync()
+    
+    def chat_json(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        发送聊天请求并返回解析后的 JSON。
+        
+        自动处理 markdown 代码块包裹。
+        
+        参数:
+            messages: 消息列表
+            temperature: 温度参数（可选）
+            model: 模型名称（可选）
+            
+        返回:
+            解析后的 JSON 字典
+        """
+        content = self.chat(messages, temperature, model)
+        return self._parse_json(content)
+    
+    def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> str:
+        """
+        便捷方法：发送 system + user 消息并返回文本。
+        
+        参数:
+            system_prompt: 系统提示词
+            user_prompt: 用户提示词
+            temperature: 温度参数（可选）
+            model: 模型名称（可选）
+            
+        返回:
+            LLM 响应的文本内容
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        return self.chat(messages, temperature, model)
+    
+    def complete_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        便捷方法：发送 system + user 消息并返回解析后的 JSON。
+        
+        参数:
+            system_prompt: 系统提示词
+            user_prompt: 用户提示词
+            temperature: 温度参数（可选）
+            model: 模型名称（可选）
+            
+        返回:
+            解析后的 JSON 字典
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        return self.chat_json(messages, temperature, model)
+    
+    def _parse_json(self, content: str) -> Dict[str, Any]:
+        """解析 JSON 响应，处理 markdown 代码块"""
+        text = content.strip()
+        
+        if text.startswith("```json"):
+            text = text[7:]
+        elif text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON 解析失败: {e}\n原始内容: {text[:500]}")
+            raise ValueError(f"LLM 返回的结果不是有效的 JSON 格式: {str(e)}")
+    
+    def get_autogen_config(self) -> Dict[str, Any]:
+        """
+        获取 autogen 框架所需的配置格式。
+        
+        返回:
+            autogen 配置字典
+        """
+        return {
+            "config_list": [{
+                "model": self.model,
+                "api_key": self.api_key,
+                "base_url": self.base_url,
+                "temperature": self.temperature,
+            }],
+            "seed": 42,
+            "timeout": self.timeout,
+            "temperature": self.temperature,
+        }
+    
+    def is_configured(self) -> bool:
+        """检查 LLM 是否已正确配置"""
+        return bool(self.api_key) and self.api_key != 'your-api-key-here'
+    
+    def get_status(self) -> Dict[str, Any]:
+        """获取当前 LLM 配置状态"""
+        return {
+            "model": self.model,
+            "base_url": self.base_url,
+            "api_key_configured": self.is_configured(),
+            "temperature": self.temperature,
+            "timeout": self.timeout,
+            "max_concurrency": settings.llm_max_concurrency,
+            "rate_limit": settings.llm_rate_limit,
+        }
+
+
+def get_llm_client() -> LLMClient:
+    """获取 LLMClient 单例实例"""
+    return LLMClient()

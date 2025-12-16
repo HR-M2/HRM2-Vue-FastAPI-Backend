@@ -7,9 +7,8 @@ import random
 import hashlib
 import logging
 from typing import Dict, Any, List
-from openai import OpenAI
 
-from .llm_config import get_config_list
+from .llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -40,18 +39,7 @@ class DevToolsService:
     """开发测试工具服务"""
     
     def __init__(self):
-        llm_config = get_config_list()[0]
-        self.api_key = llm_config.get('api_key', '')
-        self.base_url = llm_config.get('base_url', 'https://api.openai.com/v1')
-        self.model = llm_config.get('model', 'gpt-3.5-turbo')
-        self.temperature = 0.9  # 高温度增加随机性
-        self.timeout = 120
-        
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            timeout=self.timeout
-        )
+        self._llm = get_llm_client()
     
     def generate_random_resume(self, position_data: Dict[str, Any], candidate_name: str = None) -> Dict[str, str]:
         """
@@ -98,16 +86,7 @@ class DevToolsService:
 请生成一份完整的简历，确保内容有一定随机性。这次生成的候选人匹配程度请随机决定（可能是很匹配、一般匹配或不太匹配）。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                temperature=self.temperature,
-            )
-            
-            content = response.choices[0].message.content.strip()
+            content = self._llm.complete(system_prompt, user_message, temperature=0.9)
             
             # 生成文件哈希
             hash_input = f"{candidate_name}_{content}_{random.random()}"

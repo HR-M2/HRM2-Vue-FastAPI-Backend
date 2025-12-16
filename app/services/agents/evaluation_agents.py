@@ -13,8 +13,8 @@
 import json
 import logging
 from typing import Dict, Any, List, Optional
-from openai import OpenAI
-from .llm_config import get_config_list
+
+from .llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -113,20 +113,7 @@ class CandidateComprehensiveAnalyzer:
             job_config: 岗位配置信息
         """
         self.job_config = job_config or {}
-        
-        # 获取 LLM 配置
-        llm_config = get_config_list()[0]
-        self.api_key = llm_config.get('api_key', '')
-        self.base_url = llm_config.get('base_url', 'https://api.openai.com/v1')
-        self.model = llm_config.get('model', 'gpt-4')
-        self.timeout = 120
-        
-        # 初始化 OpenAI 客户端
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            timeout=self.timeout
-        )
+        self._llm = get_llm_client()
     
     def analyze(
         self,
@@ -356,27 +343,7 @@ class CandidateComprehensiveAnalyzer:
 请严格按照 Rubric 量表给出评分和分析。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.3
-            )
-            
-            content = response.choices[0].message.content.strip()
-            
-            # 清理 markdown 代码块
-            if content.startswith("```json"):
-                content = content[7:]
-            elif content.startswith("```"):
-                content = content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-            content = content.strip()
-            
-            result = json.loads(content)
+            result = self._llm.complete_json(system_prompt, user_prompt, temperature=0.3)
             result["weight"] = dimension_config["weight"]
             result["dimension_name"] = dimension_name
             return result
@@ -478,16 +445,7 @@ class CandidateComprehensiveAnalyzer:
 4. 最终建议"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.4
-            )
-            
-            return response.choices[0].message.content.strip()
+            return self._llm.complete(system_prompt, user_prompt, temperature=0.4)
             
         except Exception as e:
             logger.error(f"生成综合报告失败: {e}")

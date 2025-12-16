@@ -39,7 +39,9 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = "https://api.deepseek.com"
     llm_temperature: float = 0.7
-    llm_timeout: int = 60
+    llm_timeout: int = 120
+    llm_max_concurrency: int = 5
+    llm_rate_limit: int = 60
     
     @field_validator("cors_origins", mode="before")
     @classmethod
