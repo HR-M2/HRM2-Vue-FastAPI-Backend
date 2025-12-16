@@ -334,8 +334,8 @@ async def start_ai_screening(
 
 # ============ 面试问题生成 ============
 
-@router.post("/interview/questions", summary="AI生成面试问题", response_model=DictResponse)
-async def ai_generate_questions(
+@router.post("/interview/initial-questions", summary="AI生成初始面试问题", response_model=DictResponse)
+async def ai_generate_initial_questions(
     data: InterviewQuestionsRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -376,7 +376,7 @@ async def ai_generate_questions(
     
     # 调用AI生成问题
     agent = get_interview_assist_agent(job_config)
-    result = agent.generate_resume_based_questions(
+    result = agent.generate_initial_questions(
         resume_content=resume_content,
         count=data.count,
         interest_point_count=data.interest_point_count
@@ -415,8 +415,8 @@ async def ai_evaluate_answer(data: AnswerEvaluateRequest):
     return success_response(data=result)
 
 
-@router.post("/interview/candidate-questions", summary="AI生成候选问题", response_model=DictResponse)
-async def ai_generate_candidate_questions(data: CandidateQuestionsRequest):
+@router.post("/interview/adaptive-questions", summary="AI生成自适应问题", response_model=DictResponse)
+async def ai_generate_adaptive_questions(data: CandidateQuestionsRequest):
     """
     根据当前面试上下文生成下一步候选问题
     
@@ -427,7 +427,7 @@ async def ai_generate_candidate_questions(data: CandidateQuestionsRequest):
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     agent = get_interview_assist_agent()
-    result = agent.generate_candidate_questions(
+    result = agent.generate_adaptive_questions(
         current_question=data.current_question,
         current_answer=data.current_answer,
         conversation_history=data.conversation_history,
@@ -436,7 +436,15 @@ async def ai_generate_candidate_questions(data: CandidateQuestionsRequest):
         alternative_count=data.alternative_count
     )
     
-    return success_response(data={"candidate_questions": result})
+    # 按 source 分组返回，匹配前端期望格式
+    followups = [q for q in result if q.get("source") == "followup"]
+    alternatives = [q for q in result if q.get("source") in ("resume", "job")]
+    
+    return success_response(data={
+        "candidate_questions": result,
+        "followups": followups,
+        "alternatives": alternatives
+    })
 
 
 @router.post("/interview/report", summary="AI生成面试报告", response_model=DictResponse)

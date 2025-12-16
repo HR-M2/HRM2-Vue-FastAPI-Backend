@@ -362,7 +362,7 @@ class InterviewAssistAgent:
         """
         return self._llm.complete_json(system_prompt, user_prompt, temperature=temperature)
     
-    def generate_resume_based_questions(
+    def generate_initial_questions(
         self,
         resume_content: str,
         count: int = 3,
@@ -813,7 +813,7 @@ class InterviewAssistAgent:
         
         return "\n".join(lines)
     
-    def generate_candidate_questions(
+    def generate_adaptive_questions(
         self,
         current_question: str,
         current_answer: str,
