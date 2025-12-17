@@ -280,6 +280,72 @@ CANDIDATE_QUESTIONS_PROMPT = """基于当前面试上下文，为面试官生成
 请直接返回JSON，不要包含其他内容。
 """
 
+SIMULATE_CANDIDATE_ANSWER_PROMPT = """你现在要扮演一位正在参加面试的候选人，根据以下信息模拟回答面试官的问题。
+
+# 候选人简历
+{resume_content}
+
+# 应聘岗位
+职位: {position_title}
+职位描述: {position_description}
+
+# 候选人名字
+{candidate_name}
+
+# 候选人行为特征类型: {candidate_type}
+{type_description}
+
+# 对话历史
+{conversation_history}
+
+# 面试官当前问题
+{question}
+
+# 回答要求
+1. 严格按照候选人类型的行为特征来回答
+2. 回答必须基于简历中的真实信息，不要编造简历中没有的经历
+3. 如果简历中没有相关经验，按照候选人类型特征处理：
+   - ideal: 诚实说明没有直接经验，但会关联相关经验
+   - junior: 坦诚说不太了解
+   - nervous: 紧张地说不太确定
+   - overconfident: 可能会试图装作了解
+4. 回答长度适中（100-300字），符合真实面试场景
+5. 使用第一人称回答
+
+请直接输出候选人的回答内容，不要包含任何JSON格式或其他说明。
+"""
+
+CANDIDATE_TYPE_DESCRIPTIONS = {
+    "ideal": """理想候选人特征：
+- 回答结构清晰，逻辑性强
+- 有具体的项目案例和数据支撑
+- 能深入解释技术原理
+- 表达流畅，善于总结
+- 诚实地认识自己的能力边界""",
+    
+    "junior": """初级候选人特征：
+- 回答较简短，缺乏深度
+- 对进阶概念不太熟悉
+- 会坦诚说"这个我不太了解"或"我还在学习中"
+- 态度谦虚，愿意学习
+- 可能会说一些教科书式的答案""",
+    
+    "nervous": """紧张型候选人特征：
+- 说话可能会结巴，如"嗯..."、"那个..."
+- 用词会重复，如"就是就是"、"然后然后"
+- 容易遗漏要点，回答不够完整
+- 可能需要一些停顿来组织语言
+- 实际能力可能比表现出来的要好""",
+    
+    "overconfident": """过度自信型候选人特征：
+- 回答自信但缺乏具体细节
+- 喜欢使用高级术语但解释不清
+- 可能会不懂装懂，给出模糊的回答
+- 使用大量不确定词汇如"一般来说"、"差不多"、"应该是"
+- 缺乏对方案权衡的深入思考
+- 被追问细节时可能会暴露真实水平"""
+}
+
 FINAL_REPORT_PROMPT = """基于整场面试，生成最终评估报告。
 
 候选人: {candidate_name}
@@ -812,6 +878,91 @@ class InterviewAssistAgent:
                 "source": "followup"
             }
         ]
+
+    async def simulate_candidate_answer(
+        self,
+        question: str,
+        candidate_type: str,
+        resume_content: str,
+        candidate_name: str = "候选人",
+        conversation_history: List[Dict] = None
+    ) -> Dict[str, Any]:
+        """
+        模拟候选人回答面试问题
+        
+        参数:
+            question: 面试官的问题
+            candidate_type: 候选人类型 (ideal/junior/nervous/overconfident)
+            resume_content: 候选人简历内容
+            candidate_name: 候选人姓名
+            conversation_history: 对话历史
+        
+        返回:
+            包含模拟回答的字典
+        """
+        position_title = self.job_config.get('title', '未指定职位')
+        position_description = self.job_config.get('description', '')
+        
+        type_description = CANDIDATE_TYPE_DESCRIPTIONS.get(
+            candidate_type, 
+            CANDIDATE_TYPE_DESCRIPTIONS["ideal"]
+        )
+        
+        history_text = ""
+        if conversation_history:
+            for msg in conversation_history:
+                role = msg.get('role', '')
+                content = msg.get('content', '')
+                role_label = '面试官' if role == 'interviewer' else candidate_name
+                history_text += f"{role_label}: {content}\n"
+        else:
+            history_text = "（这是第一个问题）"
+        
+        system_prompt = f"你是{candidate_name}，正在参加{position_title}岗位的面试。请根据你的简历背景和性格特点回答面试官的问题。"
+        
+        user_prompt = SIMULATE_CANDIDATE_ANSWER_PROMPT.format(
+            resume_content=resume_content[:5000] if resume_content else "（未提供简历）",
+            position_title=position_title,
+            position_description=position_description or "（未提供职位描述）",
+            candidate_name=candidate_name,
+            candidate_type=candidate_type,
+            type_description=type_description,
+            conversation_history=history_text,
+            question=question
+        )
+        
+        try:
+            answer = await self._llm.complete(system_prompt, user_prompt, temperature=0.8)
+            
+            return {
+                "answer": answer.strip(),
+                "candidate_type": candidate_type,
+                "candidate_name": candidate_name
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to simulate candidate answer: {e}")
+            return self._get_fallback_simulated_answer(question, candidate_type, candidate_name)
+    
+    def _get_fallback_simulated_answer(
+        self, 
+        question: str, 
+        candidate_type: str,
+        candidate_name: str
+    ) -> Dict[str, Any]:
+        """备用模拟回答（LLM失败时使用）"""
+        fallback_answers = {
+            "ideal": f"这是一个很好的问题。根据我的经验，我认为...",
+            "junior": f"嗯，这个问题我了解的不是很深，但据我所知...",
+            "nervous": f"嗯...那个...让我想一下...我觉得应该是...",
+            "overconfident": f"这个简单！我当然知道，一般来说就是..."
+        }
+        
+        return {
+            "answer": fallback_answers.get(candidate_type, fallback_answers["ideal"]),
+            "candidate_type": candidate_type,
+            "candidate_name": candidate_name
+        }
 
     def _get_fallback_report(self, candidate_name: str, messages: List[Dict]) -> Dict[str, Any]:
         """备用报告生成"""

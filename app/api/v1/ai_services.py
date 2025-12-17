@@ -93,6 +93,14 @@ class RandomResumeRequest(BaseModel):
     count: int = Field(1, ge=1, le=10, description="生成数量")
 
 
+class SimulateCandidateAnswerRequest(BaseModel):
+    """模拟候选人回答请求"""
+    session_id: str = Field(..., description="面试会话ID")
+    question: str = Field(..., description="面试官提问")
+    candidate_type: str = Field(..., description="候选人类型: ideal/junior/nervous/overconfident")
+    conversation_history: Optional[List[Dict]] = Field(None, description="对话历史")
+
+
 # ============ LLM 状态 ============
 
 @router.get("/status", summary="获取LLM服务状态", response_model=DictResponse)
@@ -477,6 +485,59 @@ async def ai_generate_adaptive_questions(
         "followups": followups,
         "alternatives": alternatives
     })
+
+
+@router.post("/interview/simulate-answer", summary="AI模拟候选人回答", response_model=DictResponse)
+async def ai_simulate_candidate_answer(
+    data: SimulateCandidateAnswerRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    AI模拟候选人回答面试问题
+    
+    根据候选人简历、岗位信息、行为特征类型生成模拟回答：
+    - ideal: 理想候选人 - 回答结构清晰、有具体案例和数据
+    - junior: 初级候选人 - 回答简短、承认知识盲区
+    - nervous: 紧张型候选人 - 说话结巴、用词重复
+    - overconfident: 过度自信型候选人 - 夸大能力、缺乏具体细节
+    """
+    if not validate_llm_config():
+        raise BadRequestException("LLM服务未配置，请检查API Key")
+    
+    # 获取会话信息
+    session = await interview_crud.get_with_application(db, data.session_id)
+    if not session:
+        raise NotFoundException(f"面试会话不存在: {data.session_id}")
+    
+    # 获取简历和岗位信息
+    resume_content = ""
+    position_title = "未指定职位"
+    position_description = ""
+    candidate_name = "候选人"
+    
+    if session.application:
+        if session.application.resume:
+            resume_content = session.application.resume.content or ""
+            candidate_name = session.application.resume.candidate_name or "候选人"
+        if session.application.position:
+            position_title = session.application.position.title
+            position_description = session.application.position.description or ""
+    
+    # 调用Agent生成模拟回答
+    agent = get_interview_assist_agent({
+        "title": position_title,
+        "description": position_description
+    })
+    
+    result = await agent.simulate_candidate_answer(
+        question=data.question,
+        candidate_type=data.candidate_type,
+        resume_content=resume_content,
+        candidate_name=candidate_name,
+        conversation_history=data.conversation_history
+    )
+    
+    return success_response(data=result)
 
 
 @router.post("/interview/report", summary="AI生成面试报告", response_model=DictResponse)
