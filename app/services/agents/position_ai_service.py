@@ -2,10 +2,8 @@
 岗位AI服务模块。
 提供AI生成岗位要求的功能。
 """
-import json
 import logging
 from typing import Dict, Any, List, Optional
-from openai import OpenAI
 
 from .llm_client import get_llm_client
 from .llm_config import get_embedding_config
@@ -134,7 +132,7 @@ class PositionAIService:
             if 'team_lead_experience' not in pr:
                 pr['team_lead_experience'] = False
     
-    def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
         获取文本的向量表示（用于未来的语义搜索功能）。
         
@@ -149,14 +147,15 @@ class PositionAIService:
             return []
         
         try:
+            from openai import AsyncOpenAI
             from app.core.config import settings
-            embedding_client = OpenAI(
+            embedding_client = AsyncOpenAI(
                 api_key=self.embedding_api_key,
                 base_url=self.embedding_base_url,
                 timeout=settings.llm_timeout
             )
             
-            response = embedding_client.embeddings.create(
+            response = await embedding_client.embeddings.create(
                 model=self.embedding_model,
                 input=texts
             )
