@@ -27,22 +27,24 @@ from app.schemas.application import (
 router = APIRouter()
 
 
-@router.get("", summary="获取应聘申请列表", response_model=PagedResponseModel[ApplicationListResponse])
+@router.get("", summary="获取应聘申请列表")
 async def get_applications(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     position_id: Optional[str] = Query(None, description="岗位ID筛选"),
     resume_id: Optional[str] = Query(None, description="简历ID筛选"),
+    include_details: bool = Query(False, description="是否返回完整详情（含所有关联数据）"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     获取应聘申请列表，支持多条件筛选
+    当 include_details=True 时返回完整详情（含面试、视频分析、综合分析等关联数据）
     """
     skip = (page - 1) * page_size
     
     if position_id:
         applications = await application_crud.get_by_position(
-            db, position_id, skip=skip, limit=page_size
+            db, position_id, skip=skip, limit=page_size, include_details=include_details
         )
         total = await application_crud.count_by_position(db, position_id)
     elif resume_id:
@@ -56,16 +58,35 @@ async def get_applications(
         )
         total = await application_crud.count(db)
     
+    from app.schemas.application import (
+        ScreeningTaskBrief, InterviewSessionBrief, 
+        VideoAnalysisBrief, ComprehensiveAnalysisBrief
+    )
+    
     items = []
     for app in applications:
-        item = ApplicationListResponse.model_validate(app)
-        if app.position:
-            item.position_title = app.position.title
-        if app.resume:
-            item.candidate_name = app.resume.candidate_name
-        if app.screening_task:
-            from app.schemas.application import ScreeningTaskBrief
-            item.screening_task = ScreeningTaskBrief.model_validate(app.screening_task)
+        if include_details and position_id:
+            item = ApplicationDetailResponse.model_validate(app)
+            if app.position:
+                item.position_title = app.position.title
+            if app.resume:
+                item.candidate_name = app.resume.candidate_name
+            if app.screening_task:
+                item.screening_task = ScreeningTaskBrief.model_validate(app.screening_task)
+            if app.interview_session:
+                item.interview_session = InterviewSessionBrief.model_validate(app.interview_session)
+            if app.video_analysis:
+                item.video_analysis = VideoAnalysisBrief.model_validate(app.video_analysis)
+            if app.comprehensive_analysis:
+                item.comprehensive_analysis = ComprehensiveAnalysisBrief.model_validate(app.comprehensive_analysis)
+        else:
+            item = ApplicationListResponse.model_validate(app)
+            if app.position:
+                item.position_title = app.position.title
+            if app.resume:
+                item.candidate_name = app.resume.candidate_name
+            if app.screening_task:
+                item.screening_task = ScreeningTaskBrief.model_validate(app.screening_task)
         items.append(item.model_dump())
     
     return paged_response(items, total, page, page_size)

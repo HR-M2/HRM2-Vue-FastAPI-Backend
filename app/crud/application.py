@@ -40,21 +40,39 @@ class CRUDApplication(CRUDBase[Application]):
         position_id: str,
         *,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
+        include_details: bool = False
     ) -> List[Application]:
         """获取某岗位的所有申请，排除软删除记录"""
-        result = await db.execute(
-            select(self.model)
-            .options(
-                selectinload(self.model.position),
-                selectinload(self.model.resume),
-                selectinload(self.model.screening_task),
+        if include_details:
+            result = await db.execute(
+                select(self.model)
+                .options(
+                    selectinload(self.model.position),
+                    selectinload(self.model.resume),
+                    selectinload(self.model.screening_task),
+                    selectinload(self.model.interview_session),
+                    selectinload(self.model.video_analysis),
+                    selectinload(self.model.comprehensive_analysis),
+                )
+                .where(self.model.position_id == position_id, self.model.is_deleted == False)
+                .order_by(self.model.created_at.desc())
+                .offset(skip)
+                .limit(limit)
             )
-            .where(self.model.position_id == position_id, self.model.is_deleted == False)
-            .order_by(self.model.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
+        else:
+            result = await db.execute(
+                select(self.model)
+                .options(
+                    selectinload(self.model.position),
+                    selectinload(self.model.resume),
+                    selectinload(self.model.screening_task),
+                )
+                .where(self.model.position_id == position_id, self.model.is_deleted == False)
+                .order_by(self.model.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+            )
         return list(result.scalars().all())
     
     async def get_by_resume(
