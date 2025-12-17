@@ -27,7 +27,7 @@ from app.schemas.application import (
 router = APIRouter()
 
 
-@router.get("", summary="获取应聘申请列表")
+@router.get("", summary="获取应聘申请列表", response_model=PagedResponseModel[ApplicationListResponse])
 async def get_applications(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
