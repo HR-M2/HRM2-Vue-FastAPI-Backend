@@ -120,7 +120,7 @@ async def ai_generate_position(data: PositionGenerateRequest):
     
     try:
         service = get_position_ai_service()
-        position_data = service.generate_position_requirements(
+        position_data = await service.generate_position_requirements(
             description=data.description,
             documents=data.documents
         )
@@ -289,6 +289,22 @@ async def start_ai_screening(
     if not application.position:
         raise BadRequestException("该申请没有关联岗位")
     
+    # 检查是否已存在筛选任务
+    existing_task = await screening_crud.get_by_application(db, data.application_id)
+    if existing_task:
+        if existing_task.status == "running":
+            return success_response(
+                data={
+                    "task_id": existing_task.id,
+                    "status": "processing",
+                    "message": "筛选任务正在进行中"
+                },
+                message="筛选任务正在进行中"
+            )
+        # 如果已完成或失败，删除旧任务重新创建
+        await db.delete(existing_task)
+        await db.flush()
+    
     # 构建筛选条件
     position = application.position
     criteria = {
@@ -374,9 +390,8 @@ async def ai_generate_initial_questions(
     if not resume_content and session.application and session.application.resume:
         resume_content = session.application.resume.content or ""
     
-    # 调用AI生成问题（异步版本）
     agent = get_interview_assist_agent(job_config)
-    result = await agent.generate_initial_questions_async(
+    result = await agent.generate_initial_questions(
         resume_content=resume_content,
         count=data.count,
         interest_point_count=data.interest_point_count
@@ -405,7 +420,7 @@ async def ai_evaluate_answer(data: AnswerEvaluateRequest):
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     agent = get_interview_assist_agent()
-    result = agent.evaluate_answer(
+    result = await agent.evaluate_answer(
         question=data.question,
         answer=data.answer,
         target_skills=data.target_skills,
@@ -445,7 +460,7 @@ async def ai_generate_adaptive_questions(
                     resume_summary = resume_summary[:2000] + "..."
     
     agent = get_interview_assist_agent(job_config)
-    result = await agent.generate_adaptive_questions_async(
+    result = await agent.generate_adaptive_questions(
         current_question=data.current_question,
         current_answer=data.current_answer,
         conversation_history=data.conversation_history,
@@ -499,9 +514,8 @@ async def ai_generate_report(
         if session.application.resume:
             candidate_name = session.application.resume.candidate_name
     
-    # 调用AI生成报告（异步版本）
     agent = get_interview_assist_agent(job_config)
-    report = await agent.generate_final_report_async(
+    report = await agent.generate_final_report(
         candidate_name=candidate_name,
         messages=session.messages,
         hr_notes=data.hr_notes
@@ -601,7 +615,7 @@ async def ai_comprehensive_analysis(
     
     # 执行综合分析
     analyzer = CandidateComprehensiveAnalyzer(job_config)
-    result = analyzer.analyze(
+    result = await analyzer.analyze(
         candidate_name=candidate_name,
         resume_content=resume_content,
         screening_report=screening_report,
@@ -644,10 +658,10 @@ async def generate_random_resume(
     # 生成简历
     service = get_dev_tools_service()
     if data.count == 1:
-        resume = service.generate_random_resume(position_data)
+        resume = await service.generate_random_resume(position_data)
         resumes = [resume]
     else:
-        resumes = service.generate_batch_resumes(position_data, data.count)
+        resumes = await service.generate_batch_resumes(position_data, data.count)
     
     # 将生成的简历保存到数据库
     saved_resumes = []

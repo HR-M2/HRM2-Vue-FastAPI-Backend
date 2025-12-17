@@ -115,7 +115,7 @@ class CandidateComprehensiveAnalyzer:
         self.job_config = job_config or {}
         self._llm = get_llm_client()
     
-    def analyze(
+    async def analyze(
         self,
         candidate_name: str,
         resume_content: str,
@@ -163,7 +163,7 @@ class CandidateComprehensiveAnalyzer:
         dimension_scores = {}
         
         # 专业能力评估
-        dimension_scores["professional_competency"] = self._evaluate_dimension(
+        dimension_scores["professional_competency"] = await self._evaluate_dimension(
             "professional_competency",
             candidate_profile,
             EVALUATION_DIMENSIONS["professional_competency"]
@@ -171,7 +171,7 @@ class CandidateComprehensiveAnalyzer:
         update_progress("工作经验评估", 35)
         
         # 工作经验评估
-        dimension_scores["work_experience"] = self._evaluate_dimension(
+        dimension_scores["work_experience"] = await self._evaluate_dimension(
             "work_experience",
             candidate_profile,
             EVALUATION_DIMENSIONS["work_experience"]
@@ -179,7 +179,7 @@ class CandidateComprehensiveAnalyzer:
         update_progress("软技能评估", 50)
         
         # 软技能评估
-        dimension_scores["soft_skills"] = self._evaluate_dimension(
+        dimension_scores["soft_skills"] = await self._evaluate_dimension(
             "soft_skills",
             candidate_profile,
             EVALUATION_DIMENSIONS["soft_skills"]
@@ -187,7 +187,7 @@ class CandidateComprehensiveAnalyzer:
         update_progress("文化匹配评估", 65)
         
         # 文化匹配评估
-        dimension_scores["cultural_fit"] = self._evaluate_dimension(
+        dimension_scores["cultural_fit"] = await self._evaluate_dimension(
             "cultural_fit",
             candidate_profile,
             EVALUATION_DIMENSIONS["cultural_fit"]
@@ -195,7 +195,7 @@ class CandidateComprehensiveAnalyzer:
         update_progress("面试表现评估", 80)
         
         # 面试表现评估
-        dimension_scores["interview_performance"] = self._evaluate_dimension(
+        dimension_scores["interview_performance"] = await self._evaluate_dimension(
             "interview_performance",
             candidate_profile,
             EVALUATION_DIMENSIONS["interview_performance"]
@@ -209,7 +209,7 @@ class CandidateComprehensiveAnalyzer:
         recommendation = self._determine_recommendation(final_score)
         
         # 5. 生成综合报告
-        comprehensive_report = self._generate_comprehensive_report(
+        comprehensive_report = await self._generate_comprehensive_report(
             candidate_name=candidate_name,
             candidate_profile=candidate_profile,
             dimension_scores=dimension_scores,
@@ -293,13 +293,12 @@ class CandidateComprehensiveAnalyzer:
         
         return "\n".join(profile_parts)
     
-    def _evaluate_dimension(
+    async def _evaluate_dimension(
         self,
         dimension_key: str,
         candidate_profile: str,
         dimension_config: Dict
     ) -> Dict[str, Any]:
-        """评估单个维度。"""
         
         dimension_name = dimension_config["name"]
         sub_dimensions = dimension_config["sub_dimensions"]
@@ -340,7 +339,7 @@ class CandidateComprehensiveAnalyzer:
 请严格按照 Rubric 量表给出评分和分析。"""
 
         try:
-            result = self._llm.complete_json(system_prompt, user_prompt, temperature=0.3)
+            result = await self._llm.complete_json(system_prompt, user_prompt, temperature=0.3)
             result["weight"] = dimension_config["weight"]
             result["dimension_name"] = dimension_name
             return result
@@ -397,7 +396,7 @@ class CandidateComprehensiveAnalyzer:
             "score": final_score
         }
     
-    def _generate_comprehensive_report(
+    async def _generate_comprehensive_report(
         self,
         candidate_name: str,
         candidate_profile: str,
@@ -405,7 +404,6 @@ class CandidateComprehensiveAnalyzer:
         final_score: float,
         recommendation: Dict
     ) -> str:
-        """生成综合分析报告。"""
         
         system_prompt = """你是一位资深的招聘决策专家，擅长撰写专业的候选人综合评估报告。
 
@@ -442,7 +440,7 @@ class CandidateComprehensiveAnalyzer:
 4. 最终建议"""
 
         try:
-            return self._llm.complete(system_prompt, user_prompt, temperature=0.4)
+            return await self._llm.complete(system_prompt, user_prompt, temperature=0.4)
             
         except Exception as e:
             logger.error(f"生成综合报告失败: {e}")

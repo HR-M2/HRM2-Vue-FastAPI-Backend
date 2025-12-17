@@ -1,7 +1,6 @@
 """
 综合分析 API 路由
 """
-import asyncio
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -113,18 +112,14 @@ async def create_analysis(
         interview_records = interview_session.messages or []
         interview_report = interview_session.report or {}
     
-    # 执行 AI 综合分析（在线程池中运行同步代码）
+    # 执行 AI 综合分析
     analyzer = CandidateComprehensiveAnalyzer(job_config)
-    loop = asyncio.get_event_loop()
-    ai_result = await loop.run_in_executor(
-        None,
-        lambda: analyzer.analyze(
-            candidate_name=candidate_name,
-            resume_content=resume_content,
-            screening_report=screening_report,
-            interview_records=interview_records,
-            interview_report=interview_report,
-        )
+    ai_result = await analyzer.analyze(
+        candidate_name=candidate_name,
+        resume_content=resume_content,
+        screening_report=screening_report,
+        interview_records=interview_records,
+        interview_report=interview_report,
     )
     
     # 映射 AI 结果到数据库字段

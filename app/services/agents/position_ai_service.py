@@ -43,22 +43,11 @@ class PositionAIService:
         self.embedding_base_url = embedding_config.get('base_url', '')
         self.embedding_model = embedding_config.get('model', '')
     
-    def generate_position_requirements(
+    async def generate_position_requirements(
         self, 
         description: str, 
         documents: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
-        """
-        根据用户输入的描述和可选的文档生成岗位要求。
-        
-        参数:
-            description: 用户输入的岗位描述（可以是一句话或详细内容）
-            documents: 可选的文档列表，每个文档包含 name 和 content
-            
-        返回:
-            生成的岗位要求JSON
-        """
-        # 构建上下文
         context_parts = []
         
         if documents:
@@ -67,7 +56,6 @@ class PositionAIService:
                 doc_name = doc.get('name', '未命名文档')
                 doc_content = doc.get('content', '')
                 if doc_content:
-                    # 限制每个文档的内容长度，避免超出token限制
                     max_doc_length = 3000
                     if len(doc_content) > max_doc_length:
                         doc_content = doc_content[:max_doc_length] + "...(内容已截断)"
@@ -75,7 +63,6 @@ class PositionAIService:
         
         context = "\n".join(context_parts) if context_parts else ""
         
-        # 构建prompt
         system_prompt = f"""你是一位专业的人力资源专家，擅长根据岗位描述生成结构化的招聘要求。
 
 你需要根据用户提供的岗位描述（可能是简短的一句话，也可能是详细的需求说明），生成完整的岗位要求JSON。
@@ -99,9 +86,8 @@ class PositionAIService:
 请直接输出JSON格式的岗位要求，不要包含任何其他内容。"""
 
         try:
-            position_data = self._llm.complete_json(system_prompt, user_message)
+            position_data = await self._llm.complete_json(system_prompt, user_message)
             
-            # 验证必要字段
             self._validate_position_data(position_data)
             
             return position_data
