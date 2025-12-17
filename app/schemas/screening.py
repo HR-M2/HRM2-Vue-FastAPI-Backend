@@ -2,17 +2,18 @@
 简历筛选相关 Schema
 """
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .base import BaseSchema, TimestampSchema
 
 
-class ScreeningDimensionScores(BaseSchema):
+class ScreeningScore(BaseSchema):
     """
-    筛选任务维度评分
+    筛选评分
     
-    基于 ai_services.py 中 _parse_screening_result 的实际输出结构
+    包含综合评分和各维度评分
     """
+    comprehensive_score: Optional[float] = Field(None, ge=0, le=100, description="综合评分")
     hr_score: Optional[int] = Field(None, description="HR评分")
     technical_score: Optional[int] = Field(None, description="技术评分")
     manager_score: Optional[int] = Field(None, description="管理评分")
@@ -29,7 +30,7 @@ class ScreeningResultUpdate(BaseSchema):
     
     status: Optional[str] = Field(None, description="任务状态")
     score: Optional[float] = Field(None, ge=0, le=100, description="综合评分")
-    dimension_scores: Optional[ScreeningDimensionScores] = Field(None, description="各维度评分")
+    dimension_scores: Optional[ScreeningScore] = Field(None, description="各维度评分")
     summary: Optional[str] = Field(None, description="筛选总结")
     recommendation: Optional[str] = Field(None, description="推荐结果")
     report_content: Optional[str] = Field(None, description="报告内容")
@@ -42,7 +43,7 @@ class ScreeningTaskResponse(TimestampSchema):
     application_id: str
     status: str
     score: Optional[float]
-    dimension_scores: Optional[ScreeningDimensionScores] = Field(None, description="各维度评分")
+    dimension_scores: Optional[ScreeningScore] = Field(None, description="各维度评分")
     summary: Optional[str]
     recommendation: Optional[str]
     report_content: Optional[str]
@@ -52,3 +53,13 @@ class ScreeningTaskResponse(TimestampSchema):
     candidate_name: Optional[str] = None
     position_title: Optional[str] = None
     resume_content: Optional[str] = None
+    
+    @model_validator(mode='after')
+    def sync_comprehensive_score(self):
+        """将 score 同步到 dimension_scores.comprehensive_score"""
+        if self.score is not None:
+            if self.dimension_scores is None:
+                self.dimension_scores = ScreeningScore(comprehensive_score=self.score)
+            elif self.dimension_scores.comprehensive_score is None:
+                self.dimension_scores.comprehensive_score = self.score
+        return self
