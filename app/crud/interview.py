@@ -73,23 +73,8 @@ class CRUDInterview(CRUDBase[InterviewSession]):
         db_obj: InterviewSession,
         obj_in: InterviewSessionUpdate
     ) -> InterviewSession:
-        """更新面试会话"""
         update_data = obj_in.model_dump(exclude_unset=True)
         return await self.update(db, db_obj=db_obj, obj_in=update_data)
-    
-    async def add_message(
-        self,
-        db: AsyncSession,
-        *,
-        db_obj: InterviewSession,
-        role: str,
-        content: str
-    ) -> dict:
-        """添加问答消息"""
-        message = db_obj.add_message(role, content)
-        await db.flush()
-        await db.refresh(db_obj)
-        return message
 
 
 interview_crud = CRUDInterview(InterviewSession)

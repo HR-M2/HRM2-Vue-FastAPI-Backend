@@ -9,7 +9,7 @@ import json
 import logging
 import time
 from typing import Dict, List, Any, Optional
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from threading import Lock
 
 from app.core.config import settings
@@ -115,6 +115,12 @@ class LLMClient:
         self.timeout = settings.llm_timeout
         
         self._client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=self.timeout
+        )
+        
+        self._async_client = AsyncOpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
             timeout=self.timeout
@@ -261,6 +267,91 @@ class LLMClient:
         except json.JSONDecodeError as e:
             logger.error(f"JSON 解析失败: {e}\n原始内容: {text[:500]}")
             raise ValueError(f"LLM 返回的结果不是有效的 JSON 格式: {str(e)}")
+    
+    # ============ 异步方法 ============
+    
+    async def chat_async(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> str:
+        """
+        异步发送聊天请求并返回文本响应。
+        
+        不会阻塞事件循环，适用于 FastAPI 异步端点。
+        """
+        # 异步等待速率限制
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self._rate_limiter.wait_and_acquire)
+        
+        await self._concurrency_limiter.acquire()
+        
+        try:
+            response = await self._async_client.chat.completions.create(
+                model=model or self.model,
+                messages=messages,
+                temperature=temperature if temperature is not None else self.temperature
+            )
+            
+            if not response or not response.choices:
+                raise ValueError("LLM 返回空响应")
+            
+            content = response.choices[0].message.content
+            if content is None:
+                raise ValueError("LLM 返回内容为空")
+            
+            return content.strip()
+            
+        except Exception as e:
+            logger.error(f"LLM 异步调用失败: {e}")
+            raise
+        finally:
+            self._concurrency_limiter.release()
+    
+    async def chat_json_async(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        异步发送聊天请求并返回解析后的 JSON。
+        """
+        content = await self.chat_async(messages, temperature, model)
+        return self._parse_json(content)
+    
+    async def complete_async(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> str:
+        """
+        异步便捷方法：发送 system + user 消息并返回文本。
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        return await self.chat_async(messages, temperature, model)
+    
+    async def complete_json_async(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        异步便捷方法：发送 system + user 消息并返回解析后的 JSON。
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        return await self.chat_json_async(messages, temperature, model)
     
     def get_autogen_config(self) -> Dict[str, Any]:
         """

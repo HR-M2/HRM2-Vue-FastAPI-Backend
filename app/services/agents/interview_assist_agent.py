@@ -362,6 +362,14 @@ class InterviewAssistAgent:
         """
         return self._llm.complete_json(system_prompt, user_prompt, temperature=temperature)
     
+    async def _call_llm_async(self, system_prompt: str, user_prompt: str, temperature: float = None) -> Dict:
+        """
+        异步调用LLM并返回解析后的JSON结果。
+        
+        不会阻塞事件循环，适用于 FastAPI 异步端点。
+        """
+        return await self._llm.complete_json_async(system_prompt, user_prompt, temperature=temperature)
+    
     def generate_initial_questions(
         self,
         resume_content: str,
@@ -925,6 +933,183 @@ class InterviewAssistAgent:
             "overconfidence_detected": False,
             "suggested_next_steps": ["需要进一步评估"]
         }
+    
+    # ============ 异步方法 ============
+    
+    async def generate_initial_questions_async(
+        self,
+        resume_content: str,
+        count: int = 3,
+        interest_point_count: int = 2
+    ) -> Dict[str, Any]:
+        """
+        异步版本：根据简历内容生成针对性的面试问题。
+        """
+        if not resume_content:
+            logger.warning("No resume content provided")
+            return {"questions": [], "interest_points": []}
+        
+        job_title = self.job_config.get('title', '未指定职位')
+        job_description = self.job_config.get('description', '')
+        job_requirements = json.dumps(
+            self.job_config.get('requirements', {}), 
+            ensure_ascii=False, 
+            indent=2
+        )
+        
+        system_prompt = "你是一位资深的面试官，擅长根据候选人简历设计针对性的面试问题。"
+        
+        user_prompt = RESUME_BASED_QUESTION_PROMPT.format(
+            resume_content=resume_content[:5000],
+            job_title=job_title,
+            job_description=job_description,
+            job_requirements=job_requirements,
+            count=count,
+            interest_point_count=interest_point_count
+        )
+        
+        try:
+            result = await self._call_llm_async(system_prompt, user_prompt, temperature=0.7)
+            
+            questions = []
+            for q in result.get('questions', [])[:count]:
+                questions.append({
+                    "question": q.get("question", ""),
+                    "category": q.get("category", "简历相关"),
+                    "difficulty": q.get("difficulty", 6),
+                    "expected_skills": q.get("expected_skills", []),
+                    "source": "resume_based"
+                })
+            
+            interest_points = []
+            for point in result.get('interest_points', [])[:interest_point_count]:
+                if isinstance(point, dict):
+                    interest_points.append({
+                        "content": point.get('content', point.get('point', '')),
+                        "question": point.get('question', '请详细介绍这方面的经验'),
+                        "reason": point.get('reason', '')
+                    })
+                else:
+                    interest_points.append({
+                        "content": str(point),
+                        "question": f"请详细介绍您在{str(point)}方面的经验",
+                        "reason": ""
+                    })
+            
+            return {
+                "questions": questions,
+                "interest_points": interest_points
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to generate resume-based questions (async): {e}")
+            return self._get_fallback_resume_questions(count, interest_point_count)
+    
+    async def generate_adaptive_questions_async(
+        self,
+        current_question: str,
+        current_answer: str,
+        conversation_history: List[Dict] = None,
+        resume_summary: str = "",
+        followup_count: int = 2,
+        alternative_count: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        异步版本：根据面试上下文生成候选提问。
+        """
+        job_title = self.job_config.get('title', '未指定职位')
+        job_requirements = json.dumps(
+            self.job_config.get('requirements', {}),
+            ensure_ascii=False,
+            indent=2
+        )
+        
+        history_text = ""
+        if conversation_history:
+            for msg in conversation_history:
+                role = msg.get('role', '')
+                content = msg.get('content', '')
+                role_label = '面试官' if role == 'interviewer' else '候选人'
+                history_text += f"  {role_label}: {content}\n"
+        else:
+            history_text = "（这是第一个问题）"
+        
+        system_prompt = "你是一位资深的面试官，擅长根据候选人的回答和简历背景，设计有针对性的后续问题。"
+        
+        total_count = followup_count + alternative_count
+        user_prompt = CANDIDATE_QUESTIONS_PROMPT.format(
+            job_title=job_title,
+            job_requirements=job_requirements,
+            resume_summary=resume_summary or "（未提供简历摘要）",
+            conversation_history=history_text,
+            current_question=current_question,
+            current_answer=current_answer,
+            followup_count=followup_count,
+            alternative_count=alternative_count
+        )
+        
+        try:
+            result = await self._call_llm_async(system_prompt, user_prompt, temperature=0.7)
+            
+            questions = []
+            for q in result.get('candidate_questions', [])[:total_count]:
+                questions.append({
+                    "question": q.get("question", ""),
+                    "purpose": q.get("purpose", ""),
+                    "expected_skills": q.get("expected_skills", []),
+                    "source": q.get("source", "followup")
+                })
+            
+            return questions
+            
+        except Exception as e:
+            logger.error(f"Failed to generate candidate questions (async): {e}")
+            return self._get_fallback_candidate_questions(current_answer)
+    
+    async def generate_final_report_async(
+        self,
+        candidate_name: str,
+        messages: List[Dict],
+        hr_notes: str = ""
+    ) -> Dict[str, Any]:
+        """
+        异步版本：生成最终面试报告。
+        """
+        job_title = self.job_config.get('title', '未指定职位')
+        
+        conversation_log = self._format_conversation_log(messages)
+        
+        system_prompt = "你是一位资深的HR评估专家，擅长根据面试记录生成客观、全面的评估报告。"
+        
+        user_prompt = FINAL_REPORT_PROMPT.format(
+            candidate_name=candidate_name,
+            job_title=job_title,
+            hr_notes=hr_notes or "无",
+            conversation_log=conversation_log
+        )
+        
+        try:
+            result = await self._call_llm_async(system_prompt, user_prompt, temperature=0.4)
+            
+            report = {
+                "overall_assessment": result.get("overall_assessment", {
+                    "recommendation_score": 50,
+                    "recommendation": "待定",
+                    "summary": f"候选人{candidate_name}完成了面试。"
+                }),
+                "dimension_analysis": result.get("dimension_analysis", {}),
+                "skill_assessment": result.get("skill_assessment", []),
+                "highlights": result.get("highlights", []),
+                "red_flags": result.get("red_flags", []),
+                "overconfidence_detected": result.get("overconfidence_detected", False),
+                "suggested_next_steps": result.get("suggested_next_steps", [])
+            }
+            
+            return report
+            
+        except Exception as e:
+            logger.error(f"Failed to generate final report (async): {e}")
+            return self._get_fallback_report(candidate_name, messages)
 
 
 # 单例实例

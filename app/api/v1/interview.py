@@ -20,7 +20,7 @@ from app.schemas.interview import (
     InterviewSessionCreate,
     InterviewSessionResponse,
     InterviewSessionUpdate,
-    QAMessageCreate,
+    MessagesSyncRequest,
     GenerateQuestionsRequest,
     QAMessage,
 )
@@ -154,15 +154,12 @@ async def generate_questions(
     )
 
 
-@router.post("/{session_id}/message", summary="添加问答消息", response_model=DictResponse)
-async def add_message(
+@router.post("/{session_id}/sync", summary="同步对话记录", response_model=DictResponse)
+async def sync_messages(
     session_id: str,
-    data: QAMessageCreate,
+    data: MessagesSyncRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    添加一条问答消息
-    """
     session = await interview_crud.get(db, session_id)
     if not session:
         raise NotFoundException(f"面试会话不存在: {session_id}")
@@ -170,19 +167,26 @@ async def add_message(
     if session.is_completed:
         raise BadRequestException("面试会话已结束")
     
-    message = await interview_crud.add_message(
-        db,
-        db_obj=session,
-        role=data.role,
-        content=data.content,
-    )
+    from datetime import datetime
+    messages_data = []
+    for i, msg in enumerate(data.messages):
+        messages_data.append({
+            "seq": i + 1,
+            "role": msg.role,
+            "content": msg.content,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    update_data = InterviewSessionUpdate()
+    session.messages = messages_data
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(session, "messages")
+    await db.flush()
+    await db.refresh(session)
     
     return success_response(
-        data={
-            "message": message,
-            "message_count": session.message_count,
-        },
-        message="消息添加成功"
+        data={"message_count": len(messages_data)},
+        message="对话记录同步成功"
     )
 
 

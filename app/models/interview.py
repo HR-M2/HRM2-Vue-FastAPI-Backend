@@ -108,37 +108,10 @@ class InterviewSession(BaseModel):
     
     @property
     def has_report(self) -> bool:
-        """是否已生成面试报告（非占位符）"""
         if not self.report_markdown:
             return False
-        # 检查是否为占位符报告
         placeholder_markers = ["待 AI 服务生成", "面试报告占位"]
         return not any(marker in self.report_markdown for marker in placeholder_markers)
-    
-    def add_message(
-        self,
-        role: str,
-        content: str
-    ) -> dict:
-        """添加问答消息"""
-        from datetime import datetime
-        from sqlalchemy.orm.attributes import flag_modified
-        
-        if self.messages is None:
-            self.messages = []
-        
-        new_messages = list(self.messages)
-        message = {
-            "seq": len(new_messages) + 1,
-            "role": role,
-            "content": content,
-            "timestamp": datetime.now().isoformat()
-        }
-        new_messages.append(message)
-        self.messages = new_messages
-        
-        flag_modified(self, "messages")
-        return message
     
     def __repr__(self) -> str:
         return f"<InterviewSession(id={self.id}, messages={self.message_count})>"

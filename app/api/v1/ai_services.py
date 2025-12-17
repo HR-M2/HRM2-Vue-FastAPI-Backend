@@ -67,11 +67,11 @@ class AnswerEvaluateRequest(BaseModel):
 
 
 class CandidateQuestionsRequest(BaseModel):
-    """候选问题生成请求"""
+    session_id: Optional[str] = Field(None, description="面试会话ID，用于查询上下文")
     current_question: str = Field(..., description="当前问题")
     current_answer: str = Field(..., description="当前回答")
     conversation_history: Optional[List[Dict]] = Field(None, description="历史对话")
-    resume_summary: Optional[str] = Field("", description="简历摘要")
+    resume_summary: Optional[str] = Field(None, description="简历摘要")
     followup_count: int = Field(2, description="追问数量")
     alternative_count: int = Field(3, description="候选问题数量")
 
@@ -374,9 +374,9 @@ async def ai_generate_initial_questions(
     if not resume_content and session.application and session.application.resume:
         resume_content = session.application.resume.content or ""
     
-    # 调用AI生成问题
+    # 调用AI生成问题（异步版本）
     agent = get_interview_assist_agent(job_config)
-    result = agent.generate_initial_questions(
+    result = await agent.generate_initial_questions_async(
         resume_content=resume_content,
         count=data.count,
         interest_point_count=data.interest_point_count
@@ -416,27 +416,44 @@ async def ai_evaluate_answer(data: AnswerEvaluateRequest):
 
 
 @router.post("/interview/adaptive-questions", summary="AI生成自适应问题", response_model=DictResponse)
-async def ai_generate_adaptive_questions(data: CandidateQuestionsRequest):
-    """
-    根据当前面试上下文生成下一步候选问题
-    
-    会分析候选人回答类型（正常回答/请求澄清/跑题等），
-    并生成相应的追问和候选问题。
-    """
+async def ai_generate_adaptive_questions(
+    data: CandidateQuestionsRequest,
+    db: AsyncSession = Depends(get_db),
+):
     if not validate_llm_config():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
-    agent = get_interview_assist_agent()
-    result = agent.generate_adaptive_questions(
+    job_config = {}
+    resume_summary = data.resume_summary or ""
+    
+    if data.session_id:
+        session = await interview_crud.get_with_application(db, data.session_id)
+        if session and session.application:
+            if session.application.position:
+                pos = session.application.position
+                job_config = {
+                    "title": pos.title,
+                    "description": pos.description or "",
+                    "requirements": {
+                        "required_skills": pos.required_skills or [],
+                        "optional_skills": pos.optional_skills or [],
+                    }
+                }
+            if session.application.resume and not resume_summary:
+                resume_summary = session.application.resume.content or ""
+                if len(resume_summary) > 2000:
+                    resume_summary = resume_summary[:2000] + "..."
+    
+    agent = get_interview_assist_agent(job_config)
+    result = await agent.generate_adaptive_questions_async(
         current_question=data.current_question,
         current_answer=data.current_answer,
         conversation_history=data.conversation_history,
-        resume_summary=data.resume_summary,
+        resume_summary=resume_summary,
         followup_count=data.followup_count,
         alternative_count=data.alternative_count
     )
     
-    # 按 source 分组返回，匹配前端期望格式
     followups = [q for q in result if q.get("source") == "followup"]
     alternatives = [q for q in result if q.get("source") in ("resume", "job")]
     
@@ -482,9 +499,9 @@ async def ai_generate_report(
         if session.application.resume:
             candidate_name = session.application.resume.candidate_name
     
-    # 调用AI生成报告
+    # 调用AI生成报告（异步版本）
     agent = get_interview_assist_agent(job_config)
-    report = agent.generate_final_report(
+    report = await agent.generate_final_report_async(
         candidate_name=candidate_name,
         messages=session.messages,
         hr_notes=data.hr_notes

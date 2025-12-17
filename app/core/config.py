@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 import json
 
 # 项目根目录 (HRM2-Vue-FastAPI-Backend)
@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     """应用配置类"""
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
@@ -46,12 +46,18 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
-        """解析 CORS 来源配置（支持 JSON 字符串或列表）"""
         if isinstance(v, str):
             try:
                 return json.loads(v)
             except json.JSONDecodeError:
                 return [origin.strip() for origin in v.split(",")]
+        return v
+    
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def fix_database_path(cls, v):
+        if isinstance(v, str) and "./data/" in v:
+            return v.replace("./data/", str(BASE_DIR / "data") + "/")
         return v
     
     @property

@@ -26,10 +26,12 @@ class InterviewSessionCreate(BaseSchema):
 
 
 class QAMessageCreate(BaseSchema):
-    """添加问答消息请求"""
-    
     role: Literal["interviewer", "candidate"] = Field(..., description="角色")
     content: str = Field(..., min_length=1, description="内容")
+
+
+class MessagesSyncRequest(BaseSchema):
+    messages: List[QAMessageCreate] = Field(..., description="完整对话记录")
 
 
 class GenerateQuestionsRequest(BaseSchema):
