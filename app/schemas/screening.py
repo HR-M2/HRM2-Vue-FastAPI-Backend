@@ -2,7 +2,7 @@
 简历筛选相关 Schema
 """
 from typing import Optional
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from .base import BaseSchema, TimestampSchema
 
@@ -53,13 +53,3 @@ class ScreeningTaskResponse(TimestampSchema):
     candidate_name: Optional[str] = None
     position_title: Optional[str] = None
     resume_content: Optional[str] = None
-    
-    @model_validator(mode='after')
-    def sync_comprehensive_score(self):
-        """将 score 同步到 dimension_scores.comprehensive_score"""
-        if self.score is not None:
-            if self.dimension_scores is None:
-                self.dimension_scores = ScreeningScore(comprehensive_score=self.score)
-            elif self.dimension_scores.comprehensive_score is None:
-                self.dimension_scores.comprehensive_score = self.score
-        return self
