@@ -1,10 +1,25 @@
 """
 综合分析相关 Schema
 """
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from pydantic import Field
 
 from .base import BaseSchema, TimestampSchema
+
+
+class DimensionScoreItem(BaseSchema):
+    """
+    单个维度评分项
+    
+    基于 evaluation_agents.py 中 _evaluate_dimension 方法的实际输出结构
+    """
+    dimension_score: Optional[int] = Field(None, ge=1, le=5, description="维度评分(1-5)")
+    dimension_name: Optional[str] = Field(None, description="维度名称")
+    weight: Optional[float] = Field(None, description="权重")
+    sub_scores: Optional[Dict[str, int]] = Field(None, description="子维度评分")
+    strengths: Optional[List[str]] = Field(None, description="优势列表")
+    weaknesses: Optional[List[str]] = Field(None, description="不足列表")
+    analysis: Optional[str] = Field(None, description="详细分析说明")
 
 
 class ComprehensiveAnalysisCreate(BaseSchema):
@@ -33,7 +48,7 @@ class ComprehensiveAnalysisResponse(TimestampSchema):
     recommendation_level: str
     recommendation_reason: Optional[str]
     suggested_action: Optional[str]
-    dimension_scores: Dict
+    dimension_scores: Dict[str, DimensionScoreItem] = Field(default_factory=dict, description="各维度评分，key为维度ID")
     report: Optional[str]
     input_snapshot: Dict
     
