@@ -36,7 +36,7 @@ from .video import (
 from .interview import (
     InterviewSessionCreate,
     InterviewSessionResponse,
-    QARecordCreate,
+    QAMessageCreate,
     GenerateQuestionsRequest,
 )
 from .analysis import (
@@ -75,7 +75,7 @@ __all__ = [
     # Interview
     "InterviewSessionCreate",
     "InterviewSessionResponse",
-    "QARecordCreate",
+    "QAMessageCreate",
     "GenerateQuestionsRequest",
     # Analysis
     "ComprehensiveAnalysisCreate",

@@ -15,16 +15,21 @@ class InterviewSession(BaseModel):
     """
     面试会话模型
     
-    存储 AI 辅助面试的问答记录和报告
+    存储 AI 辅助面试的问答消息和报告
     
-    qa_records JSON 格式示例:
+    messages JSON 格式示例:
     [
         {
-            "round": 1,
-            "question": "请介绍一下你自己",
-            "answer": "我是...",
-            "score": 85,
-            "evaluation": "回答清晰，逻辑性强"
+            "seq": 1,
+            "role": "interviewer",
+            "content": "请介绍一下你自己",
+            "timestamp": "2024-01-01T10:00:00"
+        },
+        {
+            "seq": 2,
+            "role": "candidate",
+            "content": "我是...",
+            "timestamp": "2024-01-01T10:01:00"
         },
         ...
     ]
@@ -56,11 +61,11 @@ class InterviewSession(BaseModel):
         comment="面试配置(问题数量、难度等)"
     )
     
-    # ========== 问答记录 ==========
-    qa_records: Mapped[Optional[list]] = mapped_column(
+    # ========== 问答消息 ==========
+    messages: Mapped[Optional[list]] = mapped_column(
         JSON,
         default=list,
-        comment="问答记录列表"
+        comment="问答消息列表"
     )
     
     # ========== 问题池 ==========
@@ -97,9 +102,9 @@ class InterviewSession(BaseModel):
     )
     
     @property
-    def current_round(self) -> int:
-        """当前轮次"""
-        return len(self.qa_records) if self.qa_records else 0
+    def message_count(self) -> int:
+        """消息数量"""
+        return len(self.messages) if self.messages else 0
     
     @property
     def has_report(self) -> bool:
@@ -110,32 +115,30 @@ class InterviewSession(BaseModel):
         placeholder_markers = ["待 AI 服务生成", "面试报告占位"]
         return not any(marker in self.report_markdown for marker in placeholder_markers)
     
-    def add_qa_record(
+    def add_message(
         self,
-        question: str,
-        answer: str,
-        score: float = None,
-        evaluation: str = None
-    ) -> None:
-        """添加问答记录"""
+        role: str,
+        content: str
+    ) -> dict:
+        """添加问答消息"""
+        from datetime import datetime
         from sqlalchemy.orm.attributes import flag_modified
         
-        if self.qa_records is None:
-            self.qa_records = []
+        if self.messages is None:
+            self.messages = []
         
-        # 创建新列表以确保 SQLAlchemy 检测到变化
-        new_records = list(self.qa_records)
-        new_records.append({
-            "round": len(new_records) + 1,
-            "question": question,
-            "answer": answer,
-            "score": score,
-            "evaluation": evaluation
-        })
-        self.qa_records = new_records
+        new_messages = list(self.messages)
+        message = {
+            "seq": len(new_messages) + 1,
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        }
+        new_messages.append(message)
+        self.messages = new_messages
         
-        # 显式标记字段已修改
-        flag_modified(self, "qa_records")
+        flag_modified(self, "messages")
+        return message
     
     def __repr__(self) -> str:
-        return f"<InterviewSession(id={self.id}, rounds={self.current_round})>"
+        return f"<InterviewSession(id={self.id}, messages={self.message_count})>"

@@ -110,7 +110,7 @@ async def create_analysis(
     interview_report = {}
     interview_session = await interview_crud.get_by_application(db, data.application_id)
     if interview_session:
-        interview_records = interview_session.qa_records or []
+        interview_records = interview_session.messages or []
         interview_report = interview_session.report or {}
     
     # 执行 AI 综合分析（在线程池中运行同步代码）

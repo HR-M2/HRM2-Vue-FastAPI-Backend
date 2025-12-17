@@ -740,7 +740,7 @@ class InterviewAssistAgent:
     def generate_final_report(
         self,
         candidate_name: str,
-        qa_records: List[Dict],
+        messages: List[Dict],
         hr_notes: str = ""
     ) -> Dict[str, Any]:
         """
@@ -748,7 +748,7 @@ class InterviewAssistAgent:
         
         参数:
             candidate_name: 候选人姓名
-            qa_records: QA记录列表（来自 session.qa_records JSON）
+            messages: 问答消息列表（来自 session.messages JSON）
             hr_notes: HR备注
             
         返回:
@@ -757,7 +757,7 @@ class InterviewAssistAgent:
         job_title = self.job_config.get('title', '未指定职位')
         
         # 构建对话日志
-        conversation_log = self._format_conversation_log(qa_records)
+        conversation_log = self._format_conversation_log(messages)
         
         system_prompt = "你是一位资深的HR评估专家，擅长根据面试记录生成客观、全面的评估报告。"
         
@@ -790,26 +790,20 @@ class InterviewAssistAgent:
             
         except Exception as e:
             logger.error(f"Failed to generate final report: {e}")
-            return self._get_fallback_report(candidate_name, qa_records)
+            return self._get_fallback_report(candidate_name, messages)
     
-    def _format_conversation_log(self, qa_records: List[Dict]) -> str:
-        """格式化对话日志（适配新的 JSON 格式）"""
+    def _format_conversation_log(self, messages: List[Dict]) -> str:
+        """格式化对话日志（消息流格式）"""
         lines = []
-        for qa in qa_records:
-            if qa is None:
+        for msg in messages:
+            if msg is None:
                 continue
-            round_num = qa.get('round', 0)
-            question = qa.get('question', '')
-            answer = qa.get('answer', '')
-            evaluation = qa.get('evaluation', {})
-            score = evaluation.get('normalized_score', 0) if evaluation else 0
-            confidence = evaluation.get('confidence_level', 'unknown') if evaluation else 'unknown'
+            seq = msg.get('seq', 0)
+            role = msg.get('role', '')
+            content = msg.get('content', '')
             
-            lines.append(f"### 第{round_num}轮")
-            lines.append(f"**问题**: {question}")
-            lines.append(f"**回答**: {answer}")
-            lines.append(f"**评分**: {score}/100 (信心程度: {confidence})")
-            lines.append("")
+            role_label = '面试官' if role == 'interviewer' else '候选人'
+            lines.append(f"[{seq}] **{role_label}**: {content}")
         
         return "\n".join(lines)
     
@@ -843,13 +837,14 @@ class InterviewAssistAgent:
             indent=2
         )
         
-        # 格式化历史对话
+        # 格式化历史对话（支持消息流格式）
         history_text = ""
         if conversation_history:
-            for i, qa in enumerate(conversation_history, 1):
-                history_text += f"第{i}轮:\n"
-                history_text += f"  问: {qa.get('question', '')}\n"
-                history_text += f"  答: {qa.get('answer', '')}\n\n"
+            for msg in conversation_history:
+                role = msg.get('role', '')
+                content = msg.get('content', '')
+                role_label = '面试官' if role == 'interviewer' else '候选人'
+                history_text += f"  {role_label}: {content}\n"
         else:
             history_text = "（这是第一个问题）"
         
@@ -908,29 +903,15 @@ class InterviewAssistAgent:
             }
         ]
 
-    def _get_fallback_report(self, candidate_name: str, qa_records: List[Dict]) -> Dict[str, Any]:
+    def _get_fallback_report(self, candidate_name: str, messages: List[Dict]) -> Dict[str, Any]:
         """备用报告生成"""
-        # 计算平均分（过滤掉 None 值）
-        scores = [
-            qa.get('evaluation', {}).get('normalized_score', 50)
-            for qa in qa_records
-            if qa is not None
-        ]
-        avg_score = sum(scores) / len(scores) if scores else 50
-        
-        # 确定推荐意见
-        if avg_score >= 75:
-            recommendation = "推荐"
-        elif avg_score >= 60:
-            recommendation = "待定"
-        else:
-            recommendation = "不推荐"
+        message_count = len([m for m in messages if m is not None])
         
         return {
             "overall_assessment": {
-                "recommendation_score": round(avg_score, 1),
-                "recommendation": recommendation,
-                "summary": f"候选人{candidate_name}在面试中表现{'良好' if avg_score >= 60 else '一般'}。"
+                "recommendation_score": 50,
+                "recommendation": "待定",
+                "summary": f"候选人{candidate_name}完成了面试，共{message_count}条消息记录。"
             },
             "dimension_analysis": {
                 "专业能力": {"score": 3, "comment": "待评估"},

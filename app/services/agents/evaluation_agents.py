@@ -260,17 +260,14 @@ class CandidateComprehensiveAnalyzer:
         else:
             profile_parts.append("无初筛报告")
         
-        # 面试问答记录
+        # 面试问答记录（消息流格式）
         profile_parts.append("\n## 三、面试问答记录")
         if interview_records:
-            for i, qa in enumerate(interview_records, 1):
-                q = qa.get('question', '')
-                a = qa.get('answer', '')
-                profile_parts.append(f"### 问题{i}：{q}")
-                profile_parts.append(f"回答：{a}")
-                if qa.get('evaluation'):
-                    eval_data = qa['evaluation']
-                    profile_parts.append(f"评估：{eval_data.get('comment', '')}")
+            for msg in interview_records:
+                role = msg.get('role', '')
+                content = msg.get('content', '')
+                role_label = '面试官' if role == 'interviewer' else '候选人'
+                profile_parts.append(f"**{role_label}**：{content}")
         else:
             profile_parts.append("无面试记录")
         

@@ -20,9 +20,9 @@ from app.schemas.interview import (
     InterviewSessionCreate,
     InterviewSessionResponse,
     InterviewSessionUpdate,
-    QARecordCreate,
+    QAMessageCreate,
     GenerateQuestionsRequest,
-    QARecord,
+    QAMessage,
 )
 
 router = APIRouter()
@@ -52,8 +52,8 @@ async def get_interview_sessions(
     items = []
     for s in sessions:
         item = InterviewSessionResponse.model_validate(s)
-        item.current_round = s.current_round
-        item.qa_records = [QARecord(**r) for r in (s.qa_records or [])]
+        item.message_count = s.message_count
+        item.messages = [QAMessage(**m) for m in (s.messages or [])]
         items.append(item.model_dump())
     
     return paged_response(items, total, page, page_size)
@@ -80,7 +80,7 @@ async def create_interview_session(
     session = await interview_crud.create_session(db, obj_in=data)
     
     response = InterviewSessionResponse.model_validate(session)
-    response.qa_records = []
+    response.messages = []
     if application.resume:
         response.candidate_name = application.resume.candidate_name
     if application.position:
@@ -105,8 +105,8 @@ async def get_interview_session(
         raise NotFoundException(f"面试会话不存在: {session_id}")
     
     response = InterviewSessionResponse.model_validate(session)
-    response.current_round = session.current_round
-    response.qa_records = [QARecord(**r) for r in (session.qa_records or [])]
+    response.message_count = session.message_count
+    response.messages = [QAMessage(**m) for m in (session.messages or [])]
     
     if session.application:
         if session.application.resume:
@@ -154,14 +154,14 @@ async def generate_questions(
     )
 
 
-@router.post("/{session_id}/qa", summary="记录问答", response_model=DictResponse)
-async def record_qa(
+@router.post("/{session_id}/message", summary="添加问答消息", response_model=DictResponse)
+async def add_message(
     session_id: str,
-    data: QARecordCreate,
+    data: QAMessageCreate,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    记录一轮问答
+    添加一条问答消息
     """
     session = await interview_crud.get(db, session_id)
     if not session:
@@ -170,21 +170,19 @@ async def record_qa(
     if session.is_completed:
         raise BadRequestException("面试会话已结束")
     
-    session = await interview_crud.add_qa_record(
+    message = await interview_crud.add_message(
         db,
         db_obj=session,
-        question=data.question,
-        answer=data.answer,
-        score=data.score,
-        evaluation=data.evaluation,
+        role=data.role,
+        content=data.content,
     )
     
     return success_response(
         data={
-            "current_round": session.current_round,
-            "qa_records": session.qa_records,
+            "message": message,
+            "message_count": session.message_count,
         },
-        message="问答记录成功"
+        message="消息添加成功"
     )
 
 
@@ -205,16 +203,11 @@ async def complete_session(
     if session.is_completed:
         raise BadRequestException("面试会话已结束")
     
-    if not session.qa_records:
-        raise BadRequestException("没有问答记录，无法完成会话")
-    
-    # TODO: 调用 AI 服务生成报告
-    # 这里使用占位数据
-    avg_score = sum(r.get("score", 0) or 0 for r in session.qa_records) / len(session.qa_records)
+    if not session.messages:
+        raise BadRequestException("没有问答消息，无法完成会话")
     
     update_data = InterviewSessionUpdate(
         is_completed=True,
-        final_score=avg_score,
         report={"summary": "面试报告占位"},
         report_markdown="# 面试报告\n\n待 AI 服务生成..."
     )
@@ -224,7 +217,7 @@ async def complete_session(
     )
     
     response = InterviewSessionResponse.model_validate(session)
-    response.qa_records = [QARecord(**r) for r in (session.qa_records or [])]
+    response.messages = [QAMessage(**m) for m in (session.messages or [])]
     
     return success_response(
         data=response.model_dump(),

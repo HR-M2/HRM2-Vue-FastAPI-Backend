@@ -469,8 +469,8 @@ async def ai_generate_report(
     if not session:
         raise NotFoundException(f"面试会话不存在: {data.session_id}")
     
-    if not session.qa_records:
-        raise BadRequestException("没有问答记录，无法生成报告")
+    if not session.messages:
+        raise BadRequestException("没有问答消息，无法生成报告")
     
     # 构建job_config
     job_config = {}
@@ -486,7 +486,7 @@ async def ai_generate_report(
     agent = get_interview_assist_agent(job_config)
     report = agent.generate_final_report(
         candidate_name=candidate_name,
-        qa_records=session.qa_records,
+        messages=session.messages,
         hr_notes=data.hr_notes
     )
     
@@ -579,7 +579,7 @@ async def ai_comprehensive_analysis(
     interview_report = {}
     interview_session = await interview_crud.get_by_application(db, data.application_id)
     if interview_session:
-        interview_records = interview_session.qa_records or []
+        interview_records = interview_session.messages or []
         interview_report = interview_session.report or {}
     
     # 执行综合分析
