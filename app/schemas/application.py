@@ -78,7 +78,7 @@ class InterviewSessionBrief(BaseSchema):
     interview_type: str
     is_completed: bool
     final_score: Optional[float]
-    current_round: int = 0
+    message_count: int = 0
     has_report: bool = False
     created_at: datetime
 

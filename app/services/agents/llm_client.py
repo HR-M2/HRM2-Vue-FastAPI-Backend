@@ -9,7 +9,7 @@ import json
 import logging
 import time
 from typing import Dict, List, Any, Optional
-from openai import OpenAI
+from openai import AsyncOpenAI
 from threading import Lock
 
 from app.core.config import settings
@@ -50,35 +50,13 @@ class RateLimiter:
 
 
 class ConcurrencyLimiter:
-    """并发限制器"""
-    
     def __init__(self, max_concurrency: int):
         self._semaphore = asyncio.Semaphore(max_concurrency)
-        self._sync_semaphore = None
-        self._max = max_concurrency
-        self._lock = Lock()
-        self._current = 0
-    
-    def acquire_sync(self):
-        """同步获取"""
-        with self._lock:
-            while self._current >= self._max:
-                self._lock.release()
-                time.sleep(0.05)
-                self._lock.acquire()
-            self._current += 1
-    
-    def release_sync(self):
-        """同步释放"""
-        with self._lock:
-            self._current -= 1
     
     async def acquire(self):
-        """异步获取"""
         await self._semaphore.acquire()
     
     def release(self):
-        """异步释放"""
         self._semaphore.release()
 
 
@@ -114,7 +92,7 @@ class LLMClient:
         self.temperature = settings.llm_temperature
         self.timeout = settings.llm_timeout
         
-        self._client = OpenAI(
+        self._client = AsyncOpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
             timeout=self.timeout
@@ -129,120 +107,6 @@ class LLMClient:
             f"max_concurrency={settings.llm_max_concurrency}, "
             f"rate_limit={settings.llm_rate_limit}/min"
         )
-    
-    def chat(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: Optional[float] = None,
-        model: Optional[str] = None
-    ) -> str:
-        """
-        发送聊天请求并返回文本响应。
-        
-        参数:
-            messages: 消息列表 [{"role": "system/user/assistant", "content": "..."}]
-            temperature: 温度参数（可选，默认使用配置值）
-            model: 模型名称（可选，默认使用配置值）
-            
-        返回:
-            LLM 响应的文本内容
-        """
-        self._rate_limiter.wait_and_acquire()
-        self._concurrency_limiter.acquire_sync()
-        
-        try:
-            response = self._client.chat.completions.create(
-                model=model or self.model,
-                messages=messages,
-                temperature=temperature if temperature is not None else self.temperature
-            )
-            
-            if not response or not response.choices:
-                raise ValueError("LLM 返回空响应")
-            
-            content = response.choices[0].message.content
-            if content is None:
-                raise ValueError("LLM 返回内容为空")
-            
-            return content.strip()
-            
-        except Exception as e:
-            logger.error(f"LLM 调用失败: {e}")
-            raise
-        finally:
-            self._concurrency_limiter.release_sync()
-    
-    def chat_json(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: Optional[float] = None,
-        model: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        发送聊天请求并返回解析后的 JSON。
-        
-        自动处理 markdown 代码块包裹。
-        
-        参数:
-            messages: 消息列表
-            temperature: 温度参数（可选）
-            model: 模型名称（可选）
-            
-        返回:
-            解析后的 JSON 字典
-        """
-        content = self.chat(messages, temperature, model)
-        return self._parse_json(content)
-    
-    def complete(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        temperature: Optional[float] = None,
-        model: Optional[str] = None
-    ) -> str:
-        """
-        便捷方法：发送 system + user 消息并返回文本。
-        
-        参数:
-            system_prompt: 系统提示词
-            user_prompt: 用户提示词
-            temperature: 温度参数（可选）
-            model: 模型名称（可选）
-            
-        返回:
-            LLM 响应的文本内容
-        """
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        return self.chat(messages, temperature, model)
-    
-    def complete_json(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        temperature: Optional[float] = None,
-        model: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        便捷方法：发送 system + user 消息并返回解析后的 JSON。
-        
-        参数:
-            system_prompt: 系统提示词
-            user_prompt: 用户提示词
-            temperature: 温度参数（可选）
-            model: 模型名称（可选）
-            
-        返回:
-            解析后的 JSON 字典
-        """
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        return self.chat_json(messages, temperature, model)
     
     def _parse_json(self, content: str) -> Dict[str, Any]:
         """解析 JSON 响应，处理 markdown 代码块"""
@@ -261,6 +125,86 @@ class LLMClient:
         except json.JSONDecodeError as e:
             logger.error(f"JSON 解析失败: {e}\n原始内容: {text[:500]}")
             raise ValueError(f"LLM 返回的结果不是有效的 JSON 格式: {str(e)}")
+    
+    async def chat(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> str:
+        """
+        异步发送聊天请求并返回文本响应。
+        
+        不会阻塞事件循环，适用于 FastAPI 异步端点。
+        """
+        # 异步等待速率限制
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self._rate_limiter.wait_and_acquire)
+        
+        await self._concurrency_limiter.acquire()
+        
+        try:
+            response = await self._client.chat.completions.create(
+                model=model or self.model,
+                messages=messages,
+                temperature=temperature if temperature is not None else self.temperature
+            )
+            
+            if not response or not response.choices:
+                raise ValueError("LLM 返回空响应")
+            
+            content = response.choices[0].message.content
+            if content is None:
+                raise ValueError("LLM 返回内容为空")
+            
+            return content.strip()
+            
+        except Exception as e:
+            logger.error(f"LLM 调用失败: {e}")
+            raise
+        finally:
+            self._concurrency_limiter.release()
+    
+    async def chat_json(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        异步发送聊天请求并返回解析后的 JSON。
+        """
+        content = await self.chat(messages, temperature, model)
+        return self._parse_json(content)
+    
+    async def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> str:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        return await self.chat(messages, temperature, model)
+    
+    async def complete_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: Optional[float] = None,
+        model: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        异步便捷方法：发送 system + user 消息并返回解析后的 JSON。
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        return await self.chat_json(messages, temperature, model)
     
     def get_autogen_config(self) -> Dict[str, Any]:
         """

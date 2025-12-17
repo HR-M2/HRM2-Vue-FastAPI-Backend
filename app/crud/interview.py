@@ -73,25 +73,8 @@ class CRUDInterview(CRUDBase[InterviewSession]):
         db_obj: InterviewSession,
         obj_in: InterviewSessionUpdate
     ) -> InterviewSession:
-        """更新面试会话"""
         update_data = obj_in.model_dump(exclude_unset=True)
         return await self.update(db, db_obj=db_obj, obj_in=update_data)
-    
-    async def add_qa_record(
-        self,
-        db: AsyncSession,
-        *,
-        db_obj: InterviewSession,
-        question: str,
-        answer: str,
-        score: float = None,
-        evaluation: str = None
-    ) -> InterviewSession:
-        """添加问答记录"""
-        db_obj.add_qa_record(question, answer, score, evaluation)
-        await db.flush()
-        await db.refresh(db_obj)
-        return db_obj
 
 
 interview_crud = CRUDInterview(InterviewSession)

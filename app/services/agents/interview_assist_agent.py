@@ -348,37 +348,15 @@ class InterviewAssistAgent:
         self.job_config = job_config or {}
         self._llm = get_llm_client()
     
-    def _call_llm(self, system_prompt: str, user_prompt: str, temperature: float = None) -> Dict:
-        """
-        调用LLM并返回解析后的JSON结果。
-        
-        参数:
-            system_prompt: 系统提示词
-            user_prompt: 用户提示词
-            temperature: 温度参数（可选）
-            
-        返回:
-            解析后的JSON字典
-        """
-        return self._llm.complete_json(system_prompt, user_prompt, temperature=temperature)
+    async def _call_llm(self, system_prompt: str, user_prompt: str, temperature: float = None) -> Dict:
+        return await self._llm.complete_json(system_prompt, user_prompt, temperature=temperature)
     
-    def generate_initial_questions(
+    async def generate_initial_questions(
         self,
         resume_content: str,
         count: int = 3,
         interest_point_count: int = 2
     ) -> Dict[str, Any]:
-        """
-        根据简历内容生成针对性的面试问题。
-        
-        参数:
-            resume_content: 简历文本内容
-            count: 要生成的问题数量
-            interest_point_count: 要生成的兴趣点数量（1-3）
-            
-        返回:
-            包含问题和兴趣点的字典
-        """
         if not resume_content:
             logger.warning("No resume content provided")
             return {"questions": [], "interest_points": []}
@@ -394,7 +372,7 @@ class InterviewAssistAgent:
         system_prompt = "你是一位资深的面试官，擅长根据候选人简历设计针对性的面试问题。"
         
         user_prompt = RESUME_BASED_QUESTION_PROMPT.format(
-            resume_content=resume_content[:5000],  # 限制长度
+            resume_content=resume_content[:5000],
             job_title=job_title,
             job_description=job_description,
             job_requirements=job_requirements,
@@ -403,9 +381,8 @@ class InterviewAssistAgent:
         )
         
         try:
-            result = self._call_llm(system_prompt, user_prompt, temperature=0.7)
+            result = await self._call_llm(system_prompt, user_prompt, temperature=0.7)
             
-            # 处理返回的问题
             questions = []
             for q in result.get('questions', [])[:count]:
                 questions.append({
@@ -416,7 +393,6 @@ class InterviewAssistAgent:
                     "source": "resume_based"
                 })
             
-            # 处理兴趣点（新格式：包含 content 和 question）
             interest_points = []
             for point in result.get('interest_points', [])[:interest_point_count]:
                 if isinstance(point, dict):
@@ -439,7 +415,6 @@ class InterviewAssistAgent:
             
         except Exception as e:
             logger.error(f"Failed to generate resume-based questions: {e}")
-            # 返回备用问题
             return self._get_fallback_resume_questions(count, interest_point_count)
     
     def _get_fallback_resume_questions(self, count: int, interest_point_count: int = 2) -> Dict[str, Any]:
@@ -491,23 +466,12 @@ class InterviewAssistAgent:
             "interest_points": fallback_interest_points[:interest_point_count]
         }
     
-    def generate_skill_based_questions(
+    async def generate_skill_based_questions(
         self,
         category: str,
         candidate_level: str = "senior",
         count: int = 2
     ) -> List[Dict]:
-        """
-        根据技能类别生成问题。
-        
-        参数:
-            category: 问题类别（专业能力、行为面试等）
-            candidate_level: 候选人经验级别
-            count: 问题数量
-            
-        返回:
-            问题字典列表
-        """
         job_title = self.job_config.get('title', '未指定职位')
         
         system_prompt = "你是一位资深的面试官，擅长设计能有效考察候选人能力的面试问题。"
@@ -520,7 +484,7 @@ class InterviewAssistAgent:
         )
         
         try:
-            result = self._call_llm(system_prompt, user_prompt, temperature=0.7)
+            result = await self._call_llm(system_prompt, user_prompt, temperature=0.7)
             
             questions = []
             for q in result.get('questions', [])[:count]:
@@ -574,25 +538,13 @@ class InterviewAssistAgent:
         
         return questions[:count]
     
-    def evaluate_answer(
+    async def evaluate_answer(
         self,
         question: str,
         answer: str,
         target_skills: List[str] = None,
         difficulty: int = 5
     ) -> Dict[str, Any]:
-        """
-        评估候选人的回答。
-        
-        参数:
-            question: 面试问题
-            answer: 候选人的回答
-            target_skills: 要评估的目标技能
-            difficulty: 问题难度
-            
-        返回:
-            评估结果
-        """
         if not answer or len(answer.strip()) < 10:
             return self._get_minimal_answer_evaluation()
         
@@ -606,9 +558,8 @@ class InterviewAssistAgent:
         )
         
         try:
-            result = self._call_llm(system_prompt, user_prompt, temperature=0.3)
+            result = await self._call_llm(system_prompt, user_prompt, temperature=0.3)
             
-            # 确保返回的数据结构完整
             evaluation = {
                 "normalized_score": result.get("normalized_score", 50),
                 "dimension_scores": result.get("dimension_scores", {
@@ -679,25 +630,13 @@ class InterviewAssistAgent:
             "feedback": "评估完成（备用评估）"
         }
     
-    def generate_followup_suggestions(
+    async def generate_followup_suggestions(
         self,
         original_question: str,
         answer: str,
         evaluation: Dict,
         target_skill: str = None
     ) -> Dict[str, Any]:
-        """
-        生成追问问题建议。
-        
-        参数:
-            original_question: 原始问题
-            answer: 候选人的回答
-            evaluation: 回答评估
-            target_skill: 要关注的技能
-            
-        返回:
-            追问建议
-        """
         system_prompt = "你是一位资深的面试官，擅长设计追问问题来验证候选人的真实能力。"
         
         user_prompt = FOLLOWUP_SUGGESTION_PROMPT.format(
@@ -708,7 +647,7 @@ class InterviewAssistAgent:
         )
         
         try:
-            result = self._call_llm(system_prompt, user_prompt, temperature=0.6)
+            result = await self._call_llm(system_prompt, user_prompt, temperature=0.6)
             
             return {
                 "followup_suggestions": result.get("followup_suggestions", []),
@@ -737,27 +676,14 @@ class InterviewAssistAgent:
             "hr_hint": "建议追问具体细节以验证回答的真实性"
         }
     
-    def generate_final_report(
+    async def generate_final_report(
         self,
         candidate_name: str,
-        qa_records: List[Dict],
+        messages: List[Dict],
         hr_notes: str = ""
     ) -> Dict[str, Any]:
-        """
-        生成最终面试报告。
-        
-        参数:
-            candidate_name: 候选人姓名
-            qa_records: QA记录列表（来自 session.qa_records JSON）
-            hr_notes: HR备注
-            
-        返回:
-            最终报告数据
-        """
         job_title = self.job_config.get('title', '未指定职位')
-        
-        # 构建对话日志
-        conversation_log = self._format_conversation_log(qa_records)
+        conversation_log = self._format_conversation_log(messages)
         
         system_prompt = "你是一位资深的HR评估专家，擅长根据面试记录生成客观、全面的评估报告。"
         
@@ -769,9 +695,8 @@ class InterviewAssistAgent:
         )
         
         try:
-            result = self._call_llm(system_prompt, user_prompt, temperature=0.4)
+            result = await self._call_llm(system_prompt, user_prompt, temperature=0.4)
             
-            # 确保返回完整的报告结构
             report = {
                 "overall_assessment": result.get("overall_assessment", {
                     "recommendation_score": 50,
@@ -790,30 +715,24 @@ class InterviewAssistAgent:
             
         except Exception as e:
             logger.error(f"Failed to generate final report: {e}")
-            return self._get_fallback_report(candidate_name, qa_records)
+            return self._get_fallback_report(candidate_name, messages)
     
-    def _format_conversation_log(self, qa_records: List[Dict]) -> str:
-        """格式化对话日志（适配新的 JSON 格式）"""
+    def _format_conversation_log(self, messages: List[Dict]) -> str:
+        """格式化对话日志（消息流格式）"""
         lines = []
-        for qa in qa_records:
-            if qa is None:
+        for msg in messages:
+            if msg is None:
                 continue
-            round_num = qa.get('round', 0)
-            question = qa.get('question', '')
-            answer = qa.get('answer', '')
-            evaluation = qa.get('evaluation', {})
-            score = evaluation.get('normalized_score', 0) if evaluation else 0
-            confidence = evaluation.get('confidence_level', 'unknown') if evaluation else 'unknown'
+            seq = msg.get('seq', 0)
+            role = msg.get('role', '')
+            content = msg.get('content', '')
             
-            lines.append(f"### 第{round_num}轮")
-            lines.append(f"**问题**: {question}")
-            lines.append(f"**回答**: {answer}")
-            lines.append(f"**评分**: {score}/100 (信心程度: {confidence})")
-            lines.append("")
+            role_label = '面试官' if role == 'interviewer' else '候选人'
+            lines.append(f"[{seq}] **{role_label}**: {content}")
         
         return "\n".join(lines)
     
-    def generate_adaptive_questions(
+    async def generate_adaptive_questions(
         self,
         current_question: str,
         current_answer: str,
@@ -822,20 +741,6 @@ class InterviewAssistAgent:
         followup_count: int = 2,
         alternative_count: int = 3
     ) -> List[Dict[str, Any]]:
-        """
-        根据面试上下文生成候选提问。
-        
-        参数:
-            current_question: 当前问题
-            current_answer: 候选人当前回答
-            conversation_history: 历史对话记录
-            resume_summary: 简历摘要
-            followup_count: 追问问题数量
-            alternative_count: 候选问题数量
-            
-        返回:
-            候选问题列表
-        """
         job_title = self.job_config.get('title', '未指定职位')
         job_requirements = json.dumps(
             self.job_config.get('requirements', {}),
@@ -843,13 +748,13 @@ class InterviewAssistAgent:
             indent=2
         )
         
-        # 格式化历史对话
         history_text = ""
         if conversation_history:
-            for i, qa in enumerate(conversation_history, 1):
-                history_text += f"第{i}轮:\n"
-                history_text += f"  问: {qa.get('question', '')}\n"
-                history_text += f"  答: {qa.get('answer', '')}\n\n"
+            for msg in conversation_history:
+                role = msg.get('role', '')
+                content = msg.get('content', '')
+                role_label = '面试官' if role == 'interviewer' else '候选人'
+                history_text += f"  {role_label}: {content}\n"
         else:
             history_text = "（这是第一个问题）"
         
@@ -868,7 +773,7 @@ class InterviewAssistAgent:
         )
         
         try:
-            result = self._call_llm(system_prompt, user_prompt, temperature=0.7)
+            result = await self._call_llm(system_prompt, user_prompt, temperature=0.7)
             
             questions = []
             for q in result.get('candidate_questions', [])[:total_count]:
@@ -908,29 +813,15 @@ class InterviewAssistAgent:
             }
         ]
 
-    def _get_fallback_report(self, candidate_name: str, qa_records: List[Dict]) -> Dict[str, Any]:
+    def _get_fallback_report(self, candidate_name: str, messages: List[Dict]) -> Dict[str, Any]:
         """备用报告生成"""
-        # 计算平均分（过滤掉 None 值）
-        scores = [
-            qa.get('evaluation', {}).get('normalized_score', 50)
-            for qa in qa_records
-            if qa is not None
-        ]
-        avg_score = sum(scores) / len(scores) if scores else 50
-        
-        # 确定推荐意见
-        if avg_score >= 75:
-            recommendation = "推荐"
-        elif avg_score >= 60:
-            recommendation = "待定"
-        else:
-            recommendation = "不推荐"
+        message_count = len([m for m in messages if m is not None])
         
         return {
             "overall_assessment": {
-                "recommendation_score": round(avg_score, 1),
-                "recommendation": recommendation,
-                "summary": f"候选人{candidate_name}在面试中表现{'良好' if avg_score >= 60 else '一般'}。"
+                "recommendation_score": 50,
+                "recommendation": "待定",
+                "summary": f"候选人{candidate_name}完成了面试，共{message_count}条消息记录。"
             },
             "dimension_analysis": {
                 "专业能力": {"score": 3, "comment": "待评估"},

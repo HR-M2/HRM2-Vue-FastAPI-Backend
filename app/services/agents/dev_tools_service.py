@@ -41,17 +41,7 @@ class DevToolsService:
     def __init__(self):
         self._llm = get_llm_client()
     
-    def generate_random_resume(self, position_data: Dict[str, Any], candidate_name: str = None) -> Dict[str, str]:
-        """
-        根据岗位信息生成一份随机简历。
-        
-        参数:
-            position_data: 岗位要求数据
-            candidate_name: 可选的候选人姓名，如果不提供则随机生成
-            
-        返回:
-            包含 name, content, file_hash 的字典
-        """
+    async def generate_random_resume(self, position_data: Dict[str, Any], candidate_name: str = None) -> Dict[str, str]:
         if not candidate_name:
             candidate_name = generate_random_name()
         
@@ -86,9 +76,8 @@ class DevToolsService:
 请生成一份完整的简历，确保内容有一定随机性。这次生成的候选人匹配程度请随机决定（可能是很匹配、一般匹配或不太匹配）。"""
 
         try:
-            content = self._llm.complete(system_prompt, user_message, temperature=0.9)
+            content = await self._llm.complete(system_prompt, user_message, temperature=0.9)
             
-            # 生成文件哈希
             hash_input = f"{candidate_name}_{content}_{random.random()}"
             file_hash = hashlib.sha256(hash_input.encode()).hexdigest()
             
@@ -103,38 +92,26 @@ class DevToolsService:
             logger.error(f"Failed to generate resume: {e}")
             raise ValueError(f"简历生成失败: {str(e)}")
     
-    def generate_batch_resumes(
+    async def generate_batch_resumes(
         self, 
         position_data: Dict[str, Any], 
         count: int = 5
     ) -> List[Dict[str, str]]:
-        """
-        批量生成随机简历。
-        
-        参数:
-            position_data: 岗位要求数据
-            count: 生成数量（1-20）
-            
-        返回:
-            简历列表
-        """
-        count = max(1, min(20, count))  # 限制在1-20之间
+        count = max(1, min(20, count))
         resumes = []
         used_names = set()
         
         for _ in range(count):
-            # 确保姓名不重复
             candidate_name = generate_random_name()
             while candidate_name in used_names:
                 candidate_name = generate_random_name()
             used_names.add(candidate_name)
             
             try:
-                resume = self.generate_random_resume(position_data, candidate_name)
+                resume = await self.generate_random_resume(position_data, candidate_name)
                 resumes.append(resume)
             except Exception as e:
                 logger.error(f"Failed to generate resume for {candidate_name}: {e}")
-                # 继续生成其他简历
                 continue
         
         return resumes

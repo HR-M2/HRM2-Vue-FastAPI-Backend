@@ -1,20 +1,20 @@
 """
 面试会话相关 Schema
 """
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Literal
+from datetime import datetime
 from pydantic import Field
 
 from .base import BaseSchema, TimestampSchema
 
 
-class QARecord(BaseSchema):
-    """问答记录"""
+class QAMessage(BaseSchema):
+    """问答消息"""
     
-    round: int = Field(..., description="轮次")
-    question: str = Field(..., description="问题")
-    answer: str = Field(..., description="回答")
-    score: Optional[float] = Field(None, description="评分")
-    evaluation: Optional[str] = Field(None, description="评价")
+    seq: int = Field(..., description="消息序号")
+    role: Literal["interviewer", "candidate"] = Field(..., description="角色")
+    content: str = Field(..., description="内容")
+    timestamp: datetime = Field(..., description="时间戳")
 
 
 class InterviewSessionCreate(BaseSchema):
@@ -25,13 +25,13 @@ class InterviewSessionCreate(BaseSchema):
     config: Optional[Dict] = Field(default_factory=dict, description="面试配置")
 
 
-class QARecordCreate(BaseSchema):
-    """添加问答记录请求"""
-    
-    question: str = Field(..., min_length=1, description="问题")
-    answer: str = Field(..., min_length=1, description="回答")
-    score: Optional[float] = Field(None, ge=0, le=100, description="评分")
-    evaluation: Optional[str] = Field(None, description="评价")
+class QAMessageCreate(BaseSchema):
+    role: Literal["interviewer", "candidate"] = Field(..., description="角色")
+    content: str = Field(..., min_length=1, description="内容")
+
+
+class MessagesSyncRequest(BaseSchema):
+    messages: List[QAMessageCreate] = Field(..., description="完整对话记录")
 
 
 class GenerateQuestionsRequest(BaseSchema):
@@ -60,13 +60,13 @@ class InterviewSessionResponse(TimestampSchema):
     application_id: str
     interview_type: str
     config: Dict
-    qa_records: List[QARecord]
+    messages: List[QAMessage]
     question_pool: List[str]
     is_completed: bool
     final_score: Optional[float]
     report: Optional[Dict]
     report_markdown: Optional[str]
-    current_round: int = 0
+    message_count: int = 0
     
     # 关联信息
     candidate_name: Optional[str] = None
