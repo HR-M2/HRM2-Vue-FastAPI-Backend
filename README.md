@@ -12,18 +12,18 @@ Position (岗位)
 Application (应聘申请) <-- 核心表
     |
     | N:1
-    |
+    v
 Resume (简历)
 
 Application (应聘申请)
     |
-    +-- 1:N --> ScreeningTask (筛选任务)
+    +-- 1:1 --> ScreeningTask (筛选任务)
     |
-    +-- 1:N --> VideoAnalysis (视频分析)
+    +-- 1:1 --> VideoAnalysis (视频分析)
     |
-    +-- 1:N --> InterviewSession (面试会话)
+    +-- 1:1 --> InterviewSession (面试会话)
     |
-    +-- 1:N --> ComprehensiveAnalysis (综合分析)
+    +-- 1:1 --> ComprehensiveAnalysis (综合分析)
 ```
 
 ## 🛠️ 技术栈
@@ -34,36 +34,41 @@ Application (应聘申请)
 | ORM | SQLAlchemy 2.0 (异步) |
 | 数据库 | SQLite (开发) / PostgreSQL (生产) |
 | 验证 | Pydantic 2.0 |
-| 迁移 | Alembic |
+| AI 服务 | AutoGen + OpenAI SDK |
 
 ## 📁 项目结构
 
 ```
 HRM2-Vue-FastAPI-Backend/
 ├── app/
-│   ├── api/                 # API 路由
-│   │   └── v1/
-│   │       ├── positions.py    # 岗位管理
-│   │       ├── resumes.py      # 简历管理
-│   │       ├── applications.py # 应聘申请
-│   │       ├── screening.py    # 简历筛选
-│   │       ├── video.py        # 视频分析
-│   │       ├── interview.py    # 面试辅助
-│   │       └── analysis.py     # 综合分析
-│   ├── core/                # 核心配置
+│   ├── api/v1/              # API 路由
+│   │   ├── positions.py        # 岗位管理
+│   │   ├── resumes.py          # 简历管理
+│   │   ├── applications.py     # 应聘申请
+│   │   ├── screening.py        # 简历筛选
+│   │   ├── video.py            # 视频分析
+│   │   ├── interview.py        # 面试辅助
+│   │   ├── analysis.py         # 综合分析
+│   │   └── ai_services.py      # AI 服务接口
+│   ├── core/                # 核心模块
 │   │   ├── config.py           # 配置管理
 │   │   ├── database.py         # 数据库配置
 │   │   ├── response.py         # 统一响应
 │   │   └── exceptions.py       # 异常处理
-│   ├── models/              # 数据库模型
+│   ├── models/              # SQLAlchemy 模型
 │   ├── schemas/             # Pydantic Schema
 │   ├── crud/                # CRUD 操作
+│   ├── services/            # 业务服务层
+│   │   └── agents/             # AI Agent 服务
+│   │       ├── llm_client.py      # LLM 客户端
+│   │       ├── screening_agents.py # 简历筛选 Agent
+│   │       ├── interview_assist_agent.py # 面试辅助 Agent
+│   │       └── evaluation_agents.py # 评估 Agent
 │   └── main.py              # 应用入口
-├── data/                    # 数据库文件
+├── data/                    # SQLite 数据库文件
 ├── .env.example             # 环境变量模板
-├── requirements.txt         # 依赖
-├── run.py                   # 启动脚本
-└── README.md
+├── requirements.txt         # Python 依赖
+└── run.py                   # 启动脚本
 ```
 
 ## 🚀 快速开始
@@ -83,7 +88,7 @@ pip install -r requirements.txt
 
 ```bash
 copy .env.example .env
-# 编辑 .env 文件，配置数据库和 LLM 等
+# 编辑 .env 文件，配置 LLM API Key 等
 ```
 
 ### 3. 启动服务
@@ -96,90 +101,62 @@ python run.py
 uvicorn app.main:app --reload
 ```
 
-### 4. 访问文档
+服务默认运行在 `http://127.0.0.1:8000`
 
-- Swagger UI: http://127.0.0.1:8000/docs
-- ReDoc: http://127.0.0.1:8000/redoc
+## 📡 API 文档
 
-## 📡 API 端点
+启动服务后，访问交互式 API 文档查看所有端点详情：
 
-### 岗位管理 `/api/v1/positions`
+| 文档类型 | 地址 | 说明 |
+| -------- | ---- | ---- |
+| **Swagger UI** | http://127.0.0.1:8000/docs | 交互式文档，可直接测试 API |
+| **ReDoc** | http://127.0.0.1:8000/redoc | 美观的只读文档 |
+| **OpenAPI JSON** | http://127.0.0.1:8000/openapi.json | OpenAPI 3.0 规范 |
 
-| 方法 | 路径 | 说明 |
-| ---- | ---- | ---- |
-| GET | `/` | 岗位列表 |
-| POST | `/` | 创建岗位 |
-| GET | `/{id}` | 岗位详情 |
-| PATCH | `/{id}` | 更新岗位 |
-| DELETE | `/{id}` | 删除岗位 |
+> 💡 **提示**: Swagger UI 支持在线调试，可直接在浏览器中测试所有 API 端点。
 
-### 简历管理 `/api/v1/resumes`
+### API 模块概览
 
-| 方法 | 路径 | 说明 |
-| ---- | ---- | ---- |
-| GET | `/` | 简历列表 |
-| POST | `/` | 创建简历 |
-| GET | `/check-hash` | 检查文件哈希(去重) |
-| GET | `/{id}` | 简历详情 |
-| PATCH | `/{id}` | 更新简历 |
-| DELETE | `/{id}` | 删除简历 |
+| 模块 | 路径前缀 | 功能 |
+| ---- | -------- | ---- |
+| 岗位管理 | `/api/v1/positions` | 招聘岗位的增删改查 |
+| 简历管理 | `/api/v1/resumes` | 候选人简历管理 |
+| 应聘申请 | `/api/v1/applications` | 简历投递与状态流转 |
+| 简历筛选 | `/api/v1/screening` | AI 简历智能筛选 |
+| 视频分析 | `/api/v1/video` | 视频面试分析 |
+| 面试辅助 | `/api/v1/interview` | AI 面试问题生成与记录 |
+| 综合分析 | `/api/v1/analysis` | 候选人综合评估 |
+| AI 服务 | `/api/v1/ai` | AI 能力调用接口 |
 
-### 应聘申请 `/api/v1/applications`
+## � 环境变量
 
-| 方法 | 路径 | 说明 |
-| ---- | ---- | ---- |
-| GET | `/` | 申请列表 |
-| POST | `/` | 创建申请(投递) |
-| GET | `/{id}` | 申请详情(含关联数据) |
-| PATCH | `/{id}` | 更新状态 |
-| DELETE | `/{id}` | 删除申请 |
-| GET | `/stats/overview` | 状态统计 |
+参考 `.env.example` 文件：
 
-### 简历筛选 `/api/v1/screening`
+```bash
+# 应用配置
+APP_NAME=HRM2-API
+APP_ENV=development
+DEBUG=true
 
-| 方法 | 路径 | 说明 |
-| ---- | ---- | ---- |
-| GET | `/` | 任务列表 |
-| POST | `/` | 创建筛选任务 |
-| GET | `/{id}` | 任务详情 |
-| GET | `/{id}/status` | 任务状态(轮询) |
-| PATCH | `/{id}` | 更新结果 |
-| DELETE | `/{id}` | 删除任务 |
+# 数据库
+DATABASE_URL=sqlite+aiosqlite:///./data/hrm2.db
 
-### 视频分析 `/api/v1/video`
+# CORS
+CORS_ORIGINS=["http://localhost:5173"]
 
-| 方法 | 路径 | 说明 |
-| ---- | ---- | ---- |
-| GET | `/` | 分析列表 |
-| POST | `/` | 创建分析任务 |
-| GET | `/{id}` | 分析详情 |
-| GET | `/{id}/status` | 分析状态 |
-| PATCH | `/{id}` | 更新结果 |
-| DELETE | `/{id}` | 删除分析 |
-
-### 面试辅助 `/api/v1/interview`
-
-| 方法 | 路径 | 说明 |
-| ---- | ---- | ---- |
-| GET | `/` | 会话列表 |
-| POST | `/` | 创建会话 |
-| GET | `/{id}` | 会话详情 |
-| POST | `/{id}/questions` | 生成问题 |
-| POST | `/{id}/qa` | 记录问答 |
-| POST | `/{id}/complete` | 完成会话 |
-| DELETE | `/{id}` | 删除会话 |
-
-### 综合分析 `/api/v1/analysis`
-
-| 方法 | 路径 | 说明 |
-| ---- | ---- | ---- |
-| GET | `/` | 分析列表 |
-| POST | `/` | 创建分析 |
-| GET | `/{id}` | 分析详情 |
-| DELETE | `/{id}` | 删除分析 |
-| GET | `/stats/recommendation` | 推荐统计 |
+# LLM 配置 (必填)
+LLM_MODEL=deepseek-ai/DeepSeek-V3
+LLM_API_KEY=your-api-key-here
+LLM_BASE_URL=https://api.siliconflow.cn/v1
+LLM_TEMPERATURE=0.7
+LLM_TIMEOUT=120
+LLM_MAX_CONCURRENCY=2
+LLM_RATE_LIMIT=60
+```
 
 ## 📝 统一响应格式
+
+所有 API 响应均遵循统一格式：
 
 ```json
 {
@@ -189,36 +166,6 @@ uvicorn app.main:app --reload
     "data": { ... }
 }
 ```
-
-分页响应:
-
-```json
-{
-    "success": true,
-    "code": 200,
-    "message": "查询成功",
-    "data": {
-        "items": [...],
-        "total": 100,
-        "page": 1,
-        "page_size": 20,
-        "pages": 5
-    }
-}
-```
-
-## 🔧 环境变量
-
-| 变量 | 说明 | 默认值 |
-| ---- | ---- | ---- |
-| APP_NAME | 应用名称 | HRM2-API |
-| APP_ENV | 环境 | development |
-| DEBUG | 调试模式 | true |
-| DATABASE_URL | 数据库连接 | sqlite+aiosqlite:///./data/hrm2.db |
-| CORS_ORIGINS | CORS 来源 | ["http://localhost:5173"] |
-| LLM_MODEL | LLM 模型 | deepseek-chat |
-| LLM_API_KEY | LLM API Key | - |
-| LLM_BASE_URL | LLM API URL | https://api.deepseek.com |
 
 ## 📄 License
 
