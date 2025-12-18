@@ -331,8 +331,8 @@ async def start_ai_screening(
     task = await screening_crud.create_task(db, obj_in=task_data)
     
     # 更新状态为处理中（使用 running 与前端保持一致）
+    # 注：进度通过 progress_cache 内存缓存管理，不存储到数据库
     task.status = "running"
-    task.progress = 5
     await db.commit()
     
     # 后台运行筛选任务
