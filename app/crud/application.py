@@ -14,6 +14,38 @@ from .base import CRUDBase
 class CRUDApplication(CRUDBase[Application]):
     """应聘申请 CRUD 操作类"""
     
+    async def get_multi(
+        self,
+        db: AsyncSession,
+        *,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Application]:
+        """获取多条申请记录（预加载关联数据），排除软删除记录"""
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.position),
+                selectinload(self.model.resume),
+                selectinload(self.model.screening_task),
+            )
+            .where(self.model.is_deleted == False)
+            .order_by(self.model.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+    
+    async def count(self, db: AsyncSession) -> int:
+        """统计申请数量，排除软删除记录"""
+        from sqlalchemy import func
+        result = await db.execute(
+            select(func.count())
+            .select_from(self.model)
+            .where(self.model.is_deleted == False)
+        )
+        return result.scalar() or 0
+    
     async def get_detail(
         self,
         db: AsyncSession,

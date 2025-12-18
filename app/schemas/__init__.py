@@ -43,6 +43,18 @@ from .analysis import (
     ComprehensiveAnalysisCreate,
     ComprehensiveAnalysisResponse,
 )
+from .immersive import (
+    ImmersiveSessionCreate,
+    ImmersiveSessionResponse,
+    ImmersiveSessionUpdate,
+    SpeakerDiarizationRequest,
+    SpeakerDiarizationResponse,
+    StateAnalysisRequest,
+    StateAnalysisResponse,
+    CandidateState,
+    QuestionSuggestion,
+    InterviewInsight,
+)
 
 __all__ = [
     # Base
@@ -80,4 +92,15 @@ __all__ = [
     # Analysis
     "ComprehensiveAnalysisCreate",
     "ComprehensiveAnalysisResponse",
+    # Immersive
+    "ImmersiveSessionCreate",
+    "ImmersiveSessionResponse",
+    "ImmersiveSessionUpdate",
+    "SpeakerDiarizationRequest",
+    "SpeakerDiarizationResponse",
+    "StateAnalysisRequest",
+    "StateAnalysisResponse",
+    "CandidateState",
+    "QuestionSuggestion",
+    "InterviewInsight",
 ]
