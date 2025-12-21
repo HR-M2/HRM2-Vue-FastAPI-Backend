@@ -32,9 +32,9 @@ class ProgressCache:
     def update(
         self,
         task_id: str,
-        progress: int = None,
-        current_speaker: str = None,
-        step: int = None
+        progress: Optional[int] = None,
+        current_speaker: Optional[str] = None,
+        step: Optional[int] = None
     ) -> None:
         """更新任务进度"""
         with self._lock:
