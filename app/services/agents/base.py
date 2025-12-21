@@ -11,7 +11,7 @@ from app.core.progress_cache import progress_cache
 class BaseAgentManager:
     """管理autogen代理的基类。"""
     
-    def __init__(self, criteria: Dict[str, Any] = None):
+    def __init__(self, criteria: Optional[Dict[str, Any]] = None):
         self.llm_config = get_llm_config()
         self.criteria = criteria or {}
         self.agents = []
@@ -30,7 +30,7 @@ class BaseAgentManager:
         agents: List[autogen.Agent],
         speaker_selector: Callable,
         max_round: int = 12
-    ) -> GroupChat:
+    ) -> "GroupChat":
         """使用给定的代理创建群聊。"""
         self.agents = agents
         self.group_chat = GroupChat(
@@ -44,8 +44,8 @@ class BaseAgentManager:
     def create_manager(
         self,
         system_message: str = "",
-        termination_checker: Callable = None
-    ) -> GroupChatManager:
+        termination_checker: Optional[Callable] = None
+    ) -> "GroupChatManager":
         """创建群聊管理器。"""
         if not self.group_chat:
             raise ValueError("Group chat must be created first")
@@ -69,7 +69,7 @@ class BaseAgentManager:
     # 筛选流程中的agent总数（用于进度计算）
     TOTAL_AGENTS = 6  # User_Proxy -> Assistant -> HR_Expert -> Technical_Expert -> Project_Manager_Expert -> Critic
     
-    def update_task_speaker(self, speaker_name: str, step: int = None):
+    def update_task_speaker(self, speaker_name: str, step: Optional[int] = None):
         """
         更新任务的当前发言人信息（写入内存缓存）。
         

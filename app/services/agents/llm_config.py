@@ -33,7 +33,7 @@ def get_llm_status() -> Dict[str, Any]:
 def get_embedding_config() -> Dict[str, Any]:
     """获取 Embedding 模型配置"""
     return {
-        "model": settings.embedding_model if hasattr(settings, 'embedding_model') else '',
-        "api_key": settings.embedding_api_key if hasattr(settings, 'embedding_api_key') else settings.llm_api_key,
-        "base_url": settings.embedding_base_url if hasattr(settings, 'embedding_base_url') else settings.llm_base_url,
+        "model": getattr(settings, 'embedding_model', ''),
+        "api_key": getattr(settings, 'embedding_api_key', settings.llm_api_key),
+        "base_url": getattr(settings, 'embedding_base_url', settings.llm_base_url),
     }
