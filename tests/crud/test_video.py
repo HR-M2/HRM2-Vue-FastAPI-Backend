@@ -5,64 +5,17 @@
 """
 import pytest
 from httpx import AsyncClient
-
-
-async def create_application(client: AsyncClient, suffix: str = "") -> str:
-    """创建测试应聘申请，返回 ID"""
-    # 创建岗位
-    pos_data = {
-        "title": f"视频测试岗位{suffix}",
-        "department": "测试部",
-        "description": "测试用",
-        "required_skills": ["Python"],
-        "min_experience": 0,
-        "salary_min": 10,
-        "salary_max": 20
-    }
-    pos_resp = await client.post("/api/v1/positions", json=pos_data)
-    position_id = pos_resp.json()["data"]["id"]
-    
-    # 创建简历
-    resume_data = {
-        "candidate_name": f"视频测试人{suffix}",
-        "phone": "13800000003",
-        "email": "video@test.com",
-        "content": "视频测试简历内容",
-        "file_hash": f"videohash{suffix}",
-        "file_size": 512
-    }
-    resume_resp = await client.post("/api/v1/resumes", json=resume_data)
-    resume_id = resume_resp.json()["data"]["id"]
-    
-    # 创建申请
-    app_data = {
-        "position_id": position_id,
-        "resume_id": resume_id
-    }
-    app_resp = await client.post("/api/v1/applications", json=app_data)
-    return app_resp.json()["data"]["id"]
+from tests.conftest import DataFactory
 
 
 @pytest.mark.asyncio
-async def test_video_crud_flow(client: AsyncClient):
+async def test_video_crud_flow(client: AsyncClient, factory: DataFactory):
     """测试视频分析完整 CRUD 流程"""
     
-    # 准备数据
-    application_id = await create_application(client, "video1")
-    
-    # 1. Create
-    create_data = {
-        "application_id": application_id,
-        "video_name": "test_video.mp4",
-        "video_path": "/uploads/test_video.mp4",
-        "file_size": 10485760,
-        "duration": 300
-    }
-    response = await client.post("/api/v1/video", json=create_data)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    video_id = data["data"]["id"]
+    # 准备数据（工厂自动创建依赖链）
+    video = await factory.create_video()
+    video_id = video["id"]
+    application_id = video["application_id"]
     
     # 2. Read (单个)
     response = await client.get(f"/api/v1/video/{video_id}")

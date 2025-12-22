@@ -5,64 +5,31 @@
 """
 import pytest
 from httpx import AsyncClient
-
-
-async def create_position(client: AsyncClient) -> str:
-    """创建测试岗位，返回 ID"""
-    data = {
-        "title": "应聘测试岗位",
-        "department": "测试部",
-        "description": "测试用",
-        "required_skills": ["Python"],
-        "min_experience": 0,
-        "salary_min": 10,
-        "salary_max": 20
-    }
-    response = await client.post("/api/v1/positions", json=data)
-    return response.json()["data"]["id"]
-
-
-async def create_resume(client: AsyncClient, hash_suffix: str = "") -> str:
-    """创建测试简历，返回 ID"""
-    data = {
-        "candidate_name": "测试候选人",
-        "phone": "13900139000",
-        "email": "test@test.com",
-        "content": "测试简历内容",
-        "file_hash": f"testhash{hash_suffix}",
-        "file_size": 512
-    }
-    response = await client.post("/api/v1/resumes", json=data)
-    return response.json()["data"]["id"]
+from tests.conftest import DataFactory
 
 
 @pytest.mark.asyncio
-async def test_application_crud_flow(client: AsyncClient):
+async def test_application_crud_flow(client: AsyncClient, factory: DataFactory):
     """测试应聘申请完整 CRUD 流程"""
     
-    # 准备数据
-    position_id = await create_position(client)
-    resume_id = await create_resume(client)
+    # 准备数据（工厂自动创建依赖的岗位和简历）
+    position = await factory.create_position()
+    resume = await factory.create_resume()
     
     # 1. Create
-    create_data = {
-        "position_id": position_id,
-        "resume_id": resume_id,
-        "notes": "测试申请备注"
-    }
-    response = await client.post("/api/v1/applications", json=create_data)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    application_id = data["data"]["id"]
+    application = await factory.create_application(
+        position_id=position["id"],
+        resume_id=resume["id"]
+    )
+    application_id = application["id"]
     
     # 2. Read (单个)
     response = await client.get(f"/api/v1/applications/{application_id}")
     assert response.status_code == 200
-    assert response.json()["data"]["position_id"] == position_id
+    assert response.json()["data"]["position_id"] == position["id"]
     
     # 3. Read (列表 - 按 position_id 筛选，避免惰性加载问题)
-    response = await client.get("/api/v1/applications", params={"position_id": position_id})
+    response = await client.get("/api/v1/applications", params={"position_id": position["id"]})
     assert response.status_code == 200
     assert response.json()["data"]["total"] >= 1
     
