@@ -55,14 +55,6 @@ class InterviewQuestionsRequest(BaseModel):
     interest_point_count: int = Field(2, ge=1, le=5, description="兴趣点数量")
 
 
-class AnswerEvaluateRequest(BaseModel):
-    """回答评估请求"""
-    question: str = Field(..., description="面试问题")
-    answer: str = Field(..., description="候选人回答")
-    target_skills: Optional[List[str]] = Field(None, description="目标技能")
-    difficulty: int = Field(5, ge=1, le=10, description="问题难度")
-
-
 class CandidateQuestionsRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="面试会话ID，用于查询上下文")
     current_question: str = Field(..., description="当前问题")
@@ -408,30 +400,6 @@ async def ai_generate_initial_questions(
     questions_text = [q["question"] for q in result.get("questions", [])]
     update_data = InterviewSessionUpdate(question_pool=questions_text)
     await interview_crud.update_session(db, db_obj=session, obj_in=update_data)
-    
-    return success_response(data=result)
-
-
-@router.post("/interview/evaluate", summary="AI评估回答", response_model=DictResponse)
-async def ai_evaluate_answer(data: AnswerEvaluateRequest):
-    """
-    AI评估候选人的回答质量
-    
-    返回多维度评分：
-    - 技术深度、实践经验、回答具体性
-    - 逻辑清晰度、诚实度、沟通能力
-    - 是否需要追问及建议
-    """
-    if not get_llm_client().is_configured():
-        raise BadRequestException("LLM服务未配置，请检查API Key")
-    
-    agent = InterviewService()
-    result = await agent.evaluate_answer(
-        question=data.question,
-        answer=data.answer,
-        target_skills=data.target_skills,
-        difficulty=data.difficulty
-    )
     
     return success_response(data=result)
 

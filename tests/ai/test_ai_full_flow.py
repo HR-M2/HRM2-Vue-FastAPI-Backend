@@ -350,20 +350,6 @@ class TestAIFullFlow:
                 "seq": seq
             })
 
-            # 评估回答
-            evaluation = await interview_service.evaluate_answer(
-                question=question,
-                answer=answer,
-                target_skills=expected_skills,
-                difficulty=difficulty
-            )
-
-            logger.info(f"评估结果:")
-            logger.info(f"  - 标准化分数: {evaluation.get('normalized_score')}")
-            logger.info(f"  - 维度分数: {evaluation.get('dimension_scores')}")
-            logger.info(f"  - 置信度: {evaluation.get('confidence_level')}")
-            logger.info(f"  - 需要追问: {evaluation.get('should_followup')}")
-
         # 存储消息
         TestAIFullFlow.interview_messages = messages
         logger.info("✓ 模拟面试问答测试通过")
@@ -557,39 +543,6 @@ class TestInterviewService:
 
         logger.info("✓ 基于技能的问题生成测试通过")
 
-    @pytest.mark.asyncio
-    @pytest.mark.timeout(120)
-    async def test_followup_suggestions(self, interview_service: InterviewService, llm_client):
-        """测试：追问建议生成"""
-        logger.info("=" * 60)
-        logger.info("测试：追问建议生成")
-        logger.info("=" * 60)
-
-        original_question = "请介绍一下您在微服务架构方面的经验？"
-        answer = "我在之前的公司做过微服务改造，把单体应用拆分成了多个服务。"
-        evaluation = {
-            "feedback": "回答较为笼统，缺少具体细节",
-            "confidence_level": "uncertain"
-        }
-
-        result = await interview_service.generate_followup_suggestions(
-            original_question=original_question,
-            answer=answer,
-            evaluation=evaluation,
-            target_skill="微服务架构"
-        )
-
-        assert "followup_suggestions" in result
-        assert len(result["followup_suggestions"]) > 0
-
-        logger.info("追问建议：")
-        for i, s in enumerate(result["followup_suggestions"], 1):
-            logger.info(f"  建议{i}: {s.get('question', '')}")
-            logger.info(f"    目的: {s.get('purpose', '')}")
-
-        logger.info("✓ 追问建议生成测试通过")
-
-
 class TestCandidateTypes:
     """不同候选人类型的模拟测试"""
 
@@ -618,17 +571,6 @@ class TestCandidateTypes:
             )
 
             logger.info(f"回答: {answer[:200]}...")
-
-            # 评估回答
-            evaluation = await interview_service.evaluate_answer(
-                question=question,
-                answer=answer,
-                target_skills=["问题解决", "技术能力"],
-                difficulty=7
-            )
-
-            logger.info(f"评分: {evaluation.get('normalized_score')}")
-            logger.info(f"置信度: {evaluation.get('confidence_level')}")
 
         logger.info("✓ 不同候选人类型模拟测试通过")
 
