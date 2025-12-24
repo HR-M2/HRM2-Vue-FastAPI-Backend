@@ -25,8 +25,7 @@ from app.services.agents import (
     get_position_ai_service,
     get_llm_client,
     ScreeningAgentManager,
-    InterviewAssistAgent,
-    get_interview_assist_agent,
+    InterviewAgent,
     CandidateComprehensiveAnalyzer,
     DevToolsService,
     get_dev_tools_service,
@@ -398,7 +397,7 @@ async def ai_generate_initial_questions(
     if not resume_content and session.application and session.application.resume:
         resume_content = session.application.resume.content or ""
     
-    agent = get_interview_assist_agent(job_config)
+    agent = InterviewAgent(job_config)
     result = await agent.generate_initial_questions(
         resume_content=resume_content,
         count=data.count,
@@ -427,7 +426,7 @@ async def ai_evaluate_answer(data: AnswerEvaluateRequest):
     if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
-    agent = get_interview_assist_agent()
+    agent = InterviewAgent()
     result = await agent.evaluate_answer(
         question=data.question,
         answer=data.answer,
@@ -467,7 +466,7 @@ async def ai_generate_adaptive_questions(
                 if len(resume_summary) > 2000:
                     resume_summary = resume_summary[:2000] + "..."
     
-    agent = get_interview_assist_agent(job_config)
+    agent = InterviewAgent(job_config)
     result = await agent.generate_adaptive_questions(
         current_question=data.current_question,
         current_answer=data.current_answer,
@@ -524,7 +523,7 @@ async def ai_simulate_candidate_answer(
             position_description = session.application.position.description or ""
     
     # 调用Agent生成模拟回答
-    agent = get_interview_assist_agent({
+    agent = InterviewAgent({
         "title": position_title,
         "description": position_description
     })
@@ -575,7 +574,7 @@ async def ai_generate_report(
         if session.application.resume:
             candidate_name = session.application.resume.candidate_name
     
-    agent = get_interview_assist_agent(job_config)
+    agent = InterviewAgent(job_config)
     report = await agent.generate_final_report(
         candidate_name=candidate_name,
         messages=session.messages,
