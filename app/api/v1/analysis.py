@@ -22,7 +22,7 @@ from app.schemas.analysis import (
     ComprehensiveAnalysisResponse,
     ComprehensiveAnalysisUpdate,
 )
-from app.services.agents import CandidateComprehensiveAnalyzer, validate_llm_config
+from app.services.agents import CandidateComprehensiveAnalyzer, get_llm_client
 
 router = APIRouter()
 
@@ -72,7 +72,7 @@ async def create_analysis(
     调用 AI Agent 进行多维度评估，生成最终录用建议。
     如果已有分析记录，会更新该记录。
     """
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 验证应聘申请存在

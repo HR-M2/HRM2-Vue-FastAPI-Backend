@@ -23,8 +23,7 @@ from app.crud import position_crud, application_crud, screening_crud, interview_
 from app.schemas.resume import ResumeCreate
 from app.services.agents import (
     get_position_ai_service,
-    get_llm_status,
-    validate_llm_config,
+    get_llm_client,
     ScreeningAgentManager,
     InterviewAssistAgent,
     get_interview_assist_agent,
@@ -108,8 +107,9 @@ async def get_ai_status():
     """
     获取AI/LLM服务配置状态
     """
-    status = get_llm_status()
-    status["is_configured"] = validate_llm_config()
+    llm_client = get_llm_client()
+    status = llm_client.get_status()
+    status["is_configured"] = llm_client.is_configured()
     return success_response(data=status)
 
 
@@ -123,7 +123,7 @@ async def ai_generate_position(data: PositionGenerateRequest):
     输入可以是简短的一句话（如"招一个Python后端"），
     也可以是详细的需求说明，AI会生成完整的岗位要求JSON。
     """
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     try:
@@ -284,7 +284,7 @@ async def start_ai_screening(
     - 项目经理：评估管理能力
     - 综合评审：汇总给出最终建议
     """
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 获取应聘申请详情
@@ -370,7 +370,7 @@ async def ai_generate_initial_questions(
     - questions: 面试问题列表
     - interest_points: 简历中值得关注的兴趣点
     """
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 获取会话信息
@@ -424,7 +424,7 @@ async def ai_evaluate_answer(data: AnswerEvaluateRequest):
     - 逻辑清晰度、诚实度、沟通能力
     - 是否需要追问及建议
     """
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     agent = get_interview_assist_agent()
@@ -443,7 +443,7 @@ async def ai_generate_adaptive_questions(
     data: CandidateQuestionsRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     job_config = {}
@@ -501,7 +501,7 @@ async def ai_simulate_candidate_answer(
     - nervous: 紧张型候选人 - 说话结巴、用词重复
     - overconfident: 过度自信型候选人 - 夸大能力、缺乏具体细节
     """
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 获取会话信息
@@ -554,7 +554,7 @@ async def ai_generate_report(
     - 技能评估
     - 亮点和风险点
     """
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 获取会话信息
@@ -637,7 +637,7 @@ async def ai_comprehensive_analysis(
     
     输出最终录用建议。
     """
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 获取应聘申请详情
@@ -699,7 +699,7 @@ async def generate_random_resume(
     
     生成的简历有一定随机性，匹配度随机（优秀/一般/不匹配）
     """
-    if not validate_llm_config():
+    if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 获取岗位信息

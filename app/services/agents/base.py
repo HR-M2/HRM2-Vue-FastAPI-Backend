@@ -4,7 +4,7 @@
 import autogen
 from autogen import GroupChat, GroupChatManager
 from typing import List, Dict, Any, Callable, Optional
-from .llm_config import get_llm_config
+from .llm_client import get_llm_client
 from app.core.progress_cache import progress_cache
 
 
@@ -12,7 +12,7 @@ class BaseAgentManager:
     """管理autogen代理的基类。"""
     
     def __init__(self, criteria: Optional[Dict[str, Any]] = None):
-        self.llm_config = get_llm_config()
+        self.llm_config = get_llm_client().get_autogen_config()
         self.criteria = criteria or {}
         self.agents = []
         self.group_chat = None

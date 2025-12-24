@@ -4,7 +4,7 @@
 import autogen
 from autogen import AssistantAgent, UserProxyAgent, GroupChat
 from typing import Dict, Any, List, Tuple, Callable
-from .llm_config import get_llm_config
+from .llm_client import get_llm_client
 from .base import BaseAgentManager
 
 
@@ -18,7 +18,7 @@ def create_screening_agents(criteria: Dict[str, Any]) -> Tuple:
     返回:
         元组 (user_proxy, assistant, hr_agent, technical_agent, manager_agent, critic)
     """
-    llm_config = get_llm_config()
+    llm_config = get_llm_client().get_autogen_config()
     
     # 根据招聘条件生成评分规则
     scoring_rules = generate_scoring_rules(criteria)
