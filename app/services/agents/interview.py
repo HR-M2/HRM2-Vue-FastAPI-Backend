@@ -1,0 +1,490 @@
+"""
+面试助手 Agent（精简版）。
+功能：面试问题生成、回答评估、追问建议、动态追问、模拟候选人回答、最终报告。
+"""
+from __future__ import annotations
+
+import json
+from typing import Dict, Any, List, Optional
+from loguru import logger
+
+from .llm_client import get_llm_client
+
+# ================== 提示词模板 ==================
+
+RESUME_BASED_QUESTION_PROMPT = """基于以下简历内容，为面试官生成针对性的面试问题。
+
+# 简历内容
+{resume_content}
+
+# 职位信息
+职位: {job_title}
+职位描述: {job_description}
+职位要求: {job_requirements}
+
+# 要求
+1. 分析简历中的关键点，识别{interest_point_count}个值得深入探讨的兴趣点
+2. 每个兴趣点要生成对应的面试问题
+3. 额外生成{count}个高质量面试问题
+4. 问题应该：
+   - 针对简历中具体内容，避免泛泛而谈
+   - 能有效验证候选人的真实能力
+   - 难度适中（5-8分，满分10分）
+   - 覆盖技术能力和实际经验
+
+# JSON返回格式
+{{
+    "interest_points": [
+        {{
+            "content": "兴趣点的简短描述（如：在XX公司主导了微服务改造项目）",
+            "reason": "为什么这个点值得关注",
+            "question": "针对这个兴趣点的面试问题"
+        }}
+    ],
+    "questions": [
+        {{
+            "question": "问题内容",
+            "category": "简历相关",
+            "difficulty": 6,
+            "expected_skills": ["技能1", "技能2"],
+            "related_point": "对应的兴趣点"
+        }}
+    ]
+}}
+
+请直接返回JSON，不要包含其他内容。"""
+
+SKILL_BASED_QUESTION_PROMPT = """基于以下信息生成面试问题。
+
+职位: {job_title}
+候选人级别: {candidate_level}
+问题类别: {question_category}
+
+# 级别难度对应
+- junior (初级): 难度3-5分
+- mid (中级): 难度5-7分
+- senior (高级): 难度7-9分
+- expert (专家): 难度8-10分
+
+# 要求
+1. 生成{count}个该类别的高质量问题
+2. 问题难度应匹配候选人级别
+3. 问题应该能有效考察相关技能
+4. 避免太宽泛或太理论的问题
+5. 优先考察实际经验和问题解决能力
+
+# JSON返回格式
+{{
+    "questions": [
+        {{
+            "question": "问题内容",
+            "difficulty": 7,
+            "expected_skills": ["技能1", "技能2"],
+            "evaluation_points": ["评估要点1", "评估要点2"]
+        }}
+    ]
+}}
+
+请直接返回JSON，不要包含其他内容。"""
+
+CANDIDATE_QUESTIONS_PROMPT = """基于当前面试上下文，为面试官生成下一步的候选提问。
+
+# 岗位信息
+职位: {job_title}
+职位要求: {job_requirements}
+
+# 简历摘要
+{resume_summary}
+
+# 已完成的面试对话
+{conversation_history}
+
+# 当前轮次
+问题: {current_question}
+候选人回答: {current_answer}
+
+# 第一步：分析候选人回答类型
+请先判断候选人的回答属于哪种类型：
+- clarification_request: 候选人请求澄清问题、要求举例、要求进一步说明
+- counter_question: 候选人反问面试官
+- off_topic: 候选人回答偏离主题
+- normal_answer: 候选人正常回答问题
+
+# 第二步：根据回答类型生成候选问题
+请生成 {followup_count} 个追问问题（source: followup）+ {alternative_count} 个候选问题（source: resume 或 job）：
+
+1. 如果是 clarification_request：
+   - 生成对原问题的补充说明，给出具体示例或进一步解释
+   - 或者换一种更具体、更有针对性的方式重新提问
+   - 例如："比如您在XX公司主导了微服务改造项目，您能否具体说说当时的情况？您能否分享一个具体的项目经验和数据？"
+
+2. 如果是 counter_question：
+   - 简要回答候选人的问题后，回归到原始的问题
+   - 例如："关于XXX，我理解的是……您能否分享一下您的看法？"
+
+3. 如果是 off_topic：
+   - 礼貌地将候选人回答带回正题
+   - 或者从候选人的回答中找出可以深入讨论的点
+
+4. 如果是 normal_answer：
+   - 针对回答中值得深入讨论的点进行追问
+   - 或者转向简历/岗位要求中尚未覆盖的重要领域
+   - 避免重复已问过的问题
+   - 难度适中，能有效验证候选人能力
+
+# JSON返回格式
+{{
+    "answer_type": "回答类型：clarification_request/counter_question/off_topic/normal_answer",
+    "candidate_questions": [
+        {{
+            "question": "基于当前回答的追问问题",
+            "purpose": "验证XX能力",
+            "expected_skills": ["技能1"],
+            "source": "followup"
+        }},
+        {{
+            "question": "基于简历的问题",
+            "purpose": "考察XX经验",
+            "expected_skills": ["技能2"],
+            "source": "resume"
+        }},
+        {{
+            "question": "基于岗位要求的问题",
+            "purpose": "确认XX匹配度",
+            "expected_skills": ["技能3"],
+            "source": "job"
+        }}
+    ]
+}}
+
+重要：
+- 必须根据候选人的实际回答内容生成问题，不要忽略候选人的反馈
+- question 字段必须是完整的、可直接向候选人提出的问题
+- purpose 字段是简短的标签（5-10字）
+- source 字段用于区分问题来源：
+  * followup: 基于当前回答的追问（显示为"追问建议"）
+  * resume: 基于简历内容的问题（显示为"候选问题"）
+  * job: 基于岗位要求的问题（显示为"候选问题"）
+
+请直接返回JSON，不要包含其他内容。
+"""
+
+SIMULATE_CANDIDATE_ANSWER_PROMPT = """你现在要扮演一位正在参加面试的候选人，根据以下信息模拟回答面试官的问题。
+
+# 候选人简历
+{resume_content}
+
+# 应聘岗位
+职位: {position_title}
+职位描述: {position_description}
+
+# 候选人名字
+{candidate_name}
+
+# 候选人行为特征类型: {candidate_type}
+{type_description}
+
+# 对话历史
+{conversation_history}
+
+# 面试官当前问题
+{question}
+
+# 回答要求
+1. 严格按照候选人类型的行为特征来回答
+2. 回答必须基于简历中的真实信息，不要编造简历中没有的经历
+3. 如果简历中没有相关经验，按类型特征处理（ideal/junior/nervous/overconfident）
+4. 回答长度适中（100-300字），使用第一人称
+
+请直接输出候选人的回答内容，不要包含任何JSON格式或其他说明。"""
+
+FINAL_REPORT_PROMPT = """基于整场面试，生成最终评估报告。
+
+候选人: {candidate_name}
+职位: {job_title}
+HR备注: {hr_notes}
+
+## 完整问答记录
+{conversation_log}
+
+## 评分体系说明
+- 每个回答从6个维度评分（技术深度、实践经验、回答具体性、逻辑清晰度、诚实度、沟通能力）
+- 维度评分范围：1-4分
+- 最终标准化分数：0-100分
+- 评分解释：
+  * 90-100分：卓越 - 远超职位要求
+  * 75-89分：优秀 - 明显超出预期
+  * 60-74分：良好 - 符合期望
+  * 40-59分：一般 - 基本符合但有不足
+  * 25-39分：较差 - 明显低于要求
+  * 0-24分：不合格 - 严重不符合
+
+## 重要评估原则
+1. 追问结果权重最高：如果追问后表现下降，说明过度自信
+2. 关注实际深度而非表达流畅度
+3. 不要被候选人的高级术语和表面自信所迷惑
+
+## JSON返回格式
+{{
+    "overall_assessment": {{
+        "recommendation_score": 0-100的推荐分数,
+        "recommendation": "强烈推荐/推荐/待定/不推荐",
+        "summary": "100-150字的总结评价"
+    }},
+    "dimension_analysis": {{
+        "专业能力": {{"score": 1-5, "comment": "评价"}},
+        "沟通能力": {{"score": 1-5, "comment": "评价"}},
+        "学习能力": {{"score": 1-5, "comment": "评价"}},
+        "团队协作": {{"score": 1-5, "comment": "评价"}}
+    }},
+    "skill_assessment": [
+        {{"skill": "技能名", "level": "水平", "evidence": "依据"}}
+    ],
+    "highlights": ["亮点1", "亮点2"],
+    "red_flags": ["问题点1"],
+    "overconfidence_detected": true或false,
+    "suggested_next_steps": ["下一步建议1", "建议2"]
+}}
+
+请直接返回JSON，不要包含其他内容。"""
+
+CANDIDATE_TYPE_DESCRIPTIONS = {
+    "ideal": """理想候选人特征：
+- 回答结构清晰，逻辑性强
+- 有具体的项目案例和数据支撑
+- 能深入解释技术原理
+- 表达流畅，善于总结
+- 诚实地认识自己的能力边界""",
+    "junior": """初级候选人特征：
+- 回答较简短，缺乏深度
+- 对进阶概念不太熟悉
+- 会坦诚说"这个我不太了解"或"我还在学习中"
+- 态度谦虚，愿意学习
+- 可能会说一些教科书式的答案""",
+    "nervous": """紧张型候选人特征：
+- 说话可能会结巴，如"嗯..."、"那个..."
+- 用词会重复，如"就是就是"、"然后然后"
+- 容易遗漏要点，回答不够完整
+- 可能需要一些停顿来组织语言
+- 实际能力可能比表现出来的要好""",
+    "overconfident": """过度自信型候选人特征：
+- 回答自信但缺乏具体细节
+- 喜欢使用高级术语但解释不清
+- 可能会不懂装懂，给出模糊的回答
+- 使用大量不确定词汇如"一般来说"、"差不多"、"应该是"
+- 缺乏对方案权衡的深入思考
+- 被追问细节时可能会暴露真实水平"""
+}
+
+
+class InterviewService:
+    """面试助手服务。"""
+
+    def __init__(self, job_config: Dict[str, Any] | None = None):
+        self.job_config = job_config or {}
+        self._llm = get_llm_client()
+
+    async def generate_initial_questions(self, resume_content: str, count: int = 3, interest_point_count: int = 2) -> Dict[str, Any]:
+        """基于简历生成首轮问题与兴趣点。"""
+        if not resume_content:
+            return {"questions": [], "interest_points": []}
+
+        job_title = self.job_config.get("title", "未指定职位")
+        job_description = self.job_config.get("description", "")
+        job_requirements = json.dumps(self.job_config.get("requirements", {}), ensure_ascii=False, indent=2)
+
+        system_prompt = "你是一位资深的面试官，擅长根据候选人简历设计针对性的面试问题。"
+        user_prompt = RESUME_BASED_QUESTION_PROMPT.format(
+            resume_content=resume_content[:5000],
+            job_title=job_title,
+            job_description=job_description,
+            job_requirements=job_requirements,
+            count=count,
+            interest_point_count=interest_point_count,
+        )
+
+        try:
+            result = await self._llm.complete_json(system_prompt, user_prompt, temperature=0.7)
+        except Exception as exc:
+            logger.error("生成简历问题失败: {}", exc)
+            return {"questions": [], "interest_points": []}
+
+        questions = []
+        for q in result.get("questions", [])[:count]:
+            questions.append(
+                {
+                    "question": q.get("question", ""),
+                    "category": q.get("category", "简历相关"),
+                    "difficulty": q.get("difficulty", 6),
+                    "expected_skills": q.get("expected_skills", []),
+                    "source": "resume",
+                }
+            )
+
+        points = []
+        for p in result.get("interest_points", [])[:interest_point_count]:
+            if isinstance(p, dict):
+                points.append(
+                    {
+                        "content": p.get("content", p.get("point", "")),
+                        "reason": p.get("reason", ""),
+                        "question": p.get("question", ""),
+                    }
+                )
+            else:
+                points.append({"content": str(p), "reason": "", "question": f"请介绍您在{p}方面的经验"})
+
+        return {"questions": questions, "interest_points": points}
+
+    async def generate_skill_based_questions(self, category: str, candidate_level: str = "senior", count: int = 2) -> List[Dict[str, Any]]:
+        """基于技能/类别生成问题。"""
+        job_title = self.job_config.get("title", "未指定职位")
+        system_prompt = "你是一位资深的面试官，擅长设计能有效考察候选人能力的面试问题。"
+        user_prompt = SKILL_BASED_QUESTION_PROMPT.format(
+            job_title=job_title,
+            candidate_level=candidate_level,
+            question_category=category,
+            count=count,
+        )
+        try:
+            result = await self._llm.complete_json(system_prompt, user_prompt, temperature=0.7)
+        except Exception as exc:
+            logger.error("生成技能问题失败: {}", exc)
+            return []
+
+        questions: List[Dict[str, Any]] = []
+        for q in result.get("questions", [])[:count]:
+            questions.append(
+                {
+                    "question": q.get("question", ""),
+                    "category": category,
+                    "difficulty": q.get("difficulty", 6),
+                    "expected_skills": q.get("expected_skills", []),
+                    "source": "skill",
+                }
+            )
+        return questions
+
+    async def generate_adaptive_questions(
+        self,
+        current_question: str,
+        current_answer: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+        resume_summary: str = "",
+        followup_count: int = 2,
+        alternative_count: int = 3,
+    ) -> List[Dict[str, Any]]:
+        """基于当前回答生成后续问题。"""
+        job_title = self.job_config.get("title", "未指定职位")
+        job_requirements = json.dumps(self.job_config.get("requirements", {}), ensure_ascii=False, indent=2)
+        history_text = ""
+        if conversation_history:
+            for msg in conversation_history:
+                role_label = "面试官" if msg.get("role") == "interviewer" else "候选人"
+                history_text += f"{role_label}: {msg.get('content', '')}\n"
+        else:
+            history_text = "（首次提问）"
+
+        system_prompt = "你是一位资深的面试官，擅长根据候选人的回答和简历背景设计后续问题。"
+        user_prompt = CANDIDATE_QUESTIONS_PROMPT.format(
+            job_title=job_title,
+            job_requirements=job_requirements,
+            resume_summary=resume_summary or "（未提供简历摘要）",
+            conversation_history=history_text,
+            current_question=current_question,
+            current_answer=current_answer,
+            followup_count=followup_count,
+            alternative_count=alternative_count,
+        )
+        total = followup_count + alternative_count
+        try:
+            result = await self._llm.complete_json(system_prompt, user_prompt, temperature=0.7)
+            questions = []
+            for q in result.get("candidate_questions", [])[:total]:
+                questions.append(
+                    {
+                        "question": q.get("question", ""),
+                        "purpose": q.get("purpose", ""),
+                        "expected_skills": q.get("expected_skills", []),
+                        "source": q.get("source", "followup"),
+                    }
+                )
+            return questions
+        except Exception as exc:
+            logger.error("自适应问题生成失败: {}", exc)
+            return []
+
+    async def simulate_candidate_answer(
+        self,
+        question: str,
+        resume_content: str,
+        position_title: str,
+        position_description: str,
+        candidate_name: str,
+        candidate_type: str,
+        conversation_history: str = "",
+    ) -> str:
+        """模拟候选人回答，用于测试/演练。"""
+        type_desc = CANDIDATE_TYPE_DESCRIPTIONS.get(candidate_type, CANDIDATE_TYPE_DESCRIPTIONS["ideal"])
+        user_prompt = SIMULATE_CANDIDATE_ANSWER_PROMPT.format(
+            resume_content=resume_content,
+            position_title=position_title,
+            position_description=position_description,
+            candidate_name=candidate_name,
+            candidate_type=candidate_type,
+            type_description=type_desc,
+            conversation_history=conversation_history or "（无历史）",
+            question=question,
+        )
+        system_prompt = "你现在扮演候选人，需给出符合设定的真实回答。"
+        return await self._llm.complete(system_prompt, user_prompt, temperature=0.8)
+
+    async def generate_final_report(self, candidate_name: str, messages: List[Dict[str, Any]], hr_notes: str = "") -> Dict[str, Any]:
+        """生成最终面试报告。"""
+        job_title = self.job_config.get("title", "未指定职位")
+        conversation_log = self._format_conversation_log(messages)
+        system_prompt = "你是一位资深的HR评估专家，擅长根据面试记录生成客观、全面的评估报告。"
+        user_prompt = FINAL_REPORT_PROMPT.format(
+            candidate_name=candidate_name,
+            job_title=job_title,
+            hr_notes=hr_notes or "无",
+            conversation_log=conversation_log,
+        )
+        try:
+            return await self._llm.complete_json(system_prompt, user_prompt, temperature=0.4)
+        except Exception as exc:
+            logger.error("最终报告生成失败: {}", exc)
+            return {
+                "overall_assessment": {
+                    "recommendation_score": 50,
+                    "recommendation": "待定",
+                    "summary": f"候选人{candidate_name}完成了面试，建议人工复核。",
+                },
+                "dimension_analysis": {},
+                "skill_assessment": [],
+                "highlights": [],
+                "red_flags": [],
+                "overconfidence_detected": False,
+                "suggested_next_steps": [],
+            }
+
+    # ========== 内部辅助 ==========
+
+    def _format_conversation_log(self, messages: List[Dict[str, Any]]) -> str:
+        """格式化对话日志为文本。"""
+        lines = []
+        for msg in messages or []:
+            role_label = "面试官" if msg.get("role") == "interviewer" else "候选人"
+            lines.append(f"[{msg.get('seq', 0)}] **{role_label}**: {msg.get('content', '')}")
+        return "\n".join(lines)
+
+
+_interview_service: InterviewService | None = None
+
+
+def get_interview_service(job_config: Dict[str, Any] | None = None) -> InterviewService:
+    """获取 InterviewService 单例。"""
+    global _interview_service
+    if _interview_service is None or job_config is not None:
+        _interview_service = InterviewService(job_config)
+    return _interview_service

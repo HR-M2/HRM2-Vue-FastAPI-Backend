@@ -310,12 +310,6 @@ generate_initial_questions 使用的系统提示词:
 generate_skill_based_questions 使用的系统提示词:
 你是一位资深的面试官，擅长设计能有效考察候选人能力的面试问题。
 
-evaluate_answer 使用的系统提示词:
-你是一位资深的面试评估专家，擅长客观评估候选人的回答质量，特别善于识别过度自信和不懂装懂的情况。
-
-generate_followup_suggestions 使用的系统提示词:
-你是一位资深的面试官，擅长设计追问问题来验证候选人的真实能力。
-
 generate_adaptive_questions 使用的系统提示词:
 你是一位资深的面试官，擅长根据候选人的回答和简历背景，设计有针对性的后续问题。
 
