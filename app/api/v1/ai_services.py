@@ -22,12 +22,11 @@ from app.core.exceptions import NotFoundException, BadRequestException
 from app.crud import position_crud, application_crud, screening_crud, interview_crud, resume_crud
 from app.schemas.resume import ResumeCreate
 from app.services.agents import (
-    get_position_ai_service,
+    get_position_service,
     get_llm_client,
     ScreeningAgentManager,
-    InterviewAgent,
-    CandidateComprehensiveAnalyzer,
-    DevToolsService,
+    InterviewService,
+    AnalysisService,
     get_dev_tools_service,
     get_task_limiter,
 )
@@ -126,7 +125,7 @@ async def ai_generate_position(data: PositionGenerateRequest):
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     try:
-        service = get_position_ai_service()
+        service = get_position_service()
         position_data = await service.generate_position_requirements(
             description=data.description,
             documents=data.documents
@@ -397,7 +396,7 @@ async def ai_generate_initial_questions(
     if not resume_content and session.application and session.application.resume:
         resume_content = session.application.resume.content or ""
     
-    agent = InterviewAgent(job_config)
+    agent = InterviewService(job_config)
     result = await agent.generate_initial_questions(
         resume_content=resume_content,
         count=data.count,
@@ -426,7 +425,7 @@ async def ai_evaluate_answer(data: AnswerEvaluateRequest):
     if not get_llm_client().is_configured():
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
-    agent = InterviewAgent()
+    agent = InterviewService()
     result = await agent.evaluate_answer(
         question=data.question,
         answer=data.answer,
@@ -466,7 +465,7 @@ async def ai_generate_adaptive_questions(
                 if len(resume_summary) > 2000:
                     resume_summary = resume_summary[:2000] + "..."
     
-    agent = InterviewAgent(job_config)
+    agent = InterviewService(job_config)
     result = await agent.generate_adaptive_questions(
         current_question=data.current_question,
         current_answer=data.current_answer,
@@ -523,20 +522,22 @@ async def ai_simulate_candidate_answer(
             position_description = session.application.position.description or ""
     
     # 调用Agent生成模拟回答
-    agent = InterviewAgent({
+    agent = InterviewService({
         "title": position_title,
         "description": position_description
     })
     
-    result = await agent.simulate_candidate_answer(
+    answer = await agent.simulate_candidate_answer(
         question=data.question,
-        candidate_type=data.candidate_type,
         resume_content=resume_content,
+        position_title=position_title,
+        position_description=position_description,
         candidate_name=candidate_name,
+        candidate_type=data.candidate_type,
         conversation_history=data.conversation_history
     )
     
-    return success_response(data=result)
+    return success_response(data={"answer": answer})
 
 
 @router.post("/interview/report", summary="AI生成面试报告", response_model=DictResponse)
@@ -574,7 +575,7 @@ async def ai_generate_report(
         if session.application.resume:
             candidate_name = session.application.resume.candidate_name
     
-    agent = InterviewAgent(job_config)
+    agent = InterviewService(job_config)
     report = await agent.generate_final_report(
         candidate_name=candidate_name,
         messages=session.messages,
@@ -674,7 +675,7 @@ async def ai_comprehensive_analysis(
         interview_report = interview_session.report or {}
     
     # 执行综合分析
-    analyzer = CandidateComprehensiveAnalyzer(job_config)
+    analyzer = AnalysisService(job_config)
     result = await analyzer.analyze(
         candidate_name=candidate_name,
         resume_content=resume_content,

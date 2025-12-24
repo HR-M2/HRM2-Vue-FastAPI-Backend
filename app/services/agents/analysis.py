@@ -5,12 +5,10 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Dict, Any, List, Optional, Callable
+from loguru import logger
 
 from .llm_client import get_llm_client
-
-logger = logging.getLogger(__name__)
 
 # ================= 量表与提示词 =================
 
@@ -126,8 +124,8 @@ SYSTEM_PROMPT_REPORT = """你是一位资深的招聘决策专家，擅长撰写
 4. 控制在500字以内"""
 
 
-class CandidateComprehensiveAnalyzer:
-    """单人综合分析评估器（精简版）。"""
+class AnalysisService:
+    """综合分析评估服务。"""
 
     def __init__(self, job_config: Dict[str, Any] | None = None):
         self.job_config = job_config or {}
@@ -254,7 +252,7 @@ class CandidateComprehensiveAnalyzer:
             result["dimension_name"] = config["name"]
             return result
         except Exception as exc:
-            logger.error("评估维度 %s 失败: %s", config["name"], exc)
+            logger.error("评估维度 {} 失败: {}", config["name"], exc)
             return {
                 "dimension_score": 3,
                 "sub_scores": {sd: 3 for sd in subs},
@@ -319,7 +317,7 @@ class CandidateComprehensiveAnalyzer:
         try:
             return await self._llm.complete(SYSTEM_PROMPT_REPORT, user_prompt, temperature=0.4)
         except Exception as exc:
-            logger.error("生成综合报告失败: %s", exc)
+            logger.error("生成综合报告失败: {}", exc)
             return f"""## {candidate_name} 综合分析报告
 
 **综合得分**：{final_score}分
@@ -327,3 +325,14 @@ class CandidateComprehensiveAnalyzer:
 **建议行动**：{recommendation['action']}
 
 由于生成失败，请参考各维度评分自行决策。"""
+
+
+_analysis_service: AnalysisService | None = None
+
+
+def get_analysis_service(job_config: Dict[str, Any] | None = None) -> AnalysisService:
+    """获取 AnalysisService 单例。"""
+    global _analysis_service
+    if _analysis_service is None or job_config is not None:
+        _analysis_service = AnalysisService(job_config)
+    return _analysis_service

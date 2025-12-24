@@ -3,13 +3,11 @@
 """
 
 import hashlib
-import logging
 import random
 from typing import Dict, Any, List
+from loguru import logger
 
 from .llm_client import get_llm_client
-
-logger = logging.getLogger(__name__)
 
 # ================= 提示词模板 =================
 
@@ -116,7 +114,7 @@ class DevToolsService:
                 resume = await self.generate_random_resume(position_data, name)
                 resumes.append(resume)
             except Exception as exc:
-                logger.error("生成简历失败: %s", exc)
+                logger.error("生成简历失败: {}", exc)
                 continue
 
         return resumes

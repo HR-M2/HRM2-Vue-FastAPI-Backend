@@ -5,9 +5,9 @@ agents 模块入口。
 
 from .llm_client import get_llm_client, get_embedding_config, get_task_limiter
 from .dev_tools import get_dev_tools_service, DevToolsService
-from .analysis import CandidateComprehensiveAnalyzer
-from .interview import InterviewAgent
-from .position import PositionAIService, get_position_ai_service
+from .analysis import AnalysisService, get_analysis_service
+from .interview import InterviewService, get_interview_service
+from .position import PositionService, get_position_service
 from .screening import ScreeningAgentManager, create_screening_agents
 
 __all__ = [
@@ -16,10 +16,12 @@ __all__ = [
     "get_task_limiter",
     "DevToolsService",
     "get_dev_tools_service",
-    "CandidateComprehensiveAnalyzer",
-    "InterviewAgent",
-    "PositionAIService",
-    "get_position_ai_service",
+    "AnalysisService",
+    "get_analysis_service",
+    "InterviewService",
+    "get_interview_service",
+    "PositionService",
+    "get_position_service",
     "ScreeningAgentManager",
     "create_screening_agents",
 ]

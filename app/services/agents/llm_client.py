@@ -3,15 +3,13 @@
 """
 import asyncio
 import json
-import logging
 import time
 from typing import Dict, List, Any, Optional
 from openai import AsyncOpenAI
 from threading import Lock
+from loguru import logger
 
 from app.core.config import settings
-
-logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
@@ -89,7 +87,7 @@ class LLMClient:
 
         self._initialized = True
         logger.info(
-            "LLMClient initialized: model=%s, max_concurrency=%s, rate_limit=%s/min",
+            "LLMClient initialized: model={}, max_concurrency={}, rate_limit={}/min",
             self.model,
             settings.llm_max_concurrency,
             settings.llm_rate_limit,
@@ -109,7 +107,7 @@ class LLMClient:
         try:
             return json.loads(text)
         except json.JSONDecodeError as exc:
-            logger.error("JSON 解析失败: %s\n原始内容: %s", exc, text[:500])
+            logger.error("JSON 解析失败: {}\n原始内容: {}", exc, text[:500])
             raise ValueError(f"LLM 返回的结果不是有效的 JSON 格式: {exc}")
 
     async def chat(
@@ -136,7 +134,7 @@ class LLMClient:
                 raise ValueError("LLM 返回内容为空")
             return content.strip()
         except Exception as exc:
-            logger.error("LLM 调用失败: %s", exc)
+            logger.error("LLM 调用失败: {}", exc)
             raise
         finally:
             self._concurrency_limiter.release()
@@ -246,7 +244,7 @@ class TaskConcurrencyLimiter:
         self._current_tasks = 0
         self._task_lock = Lock()
         self._initialized = True
-        logger.info("TaskConcurrencyLimiter initialized: max_tasks=%s", self._max_tasks)
+        logger.info("TaskConcurrencyLimiter initialized: max_tasks={}", self._max_tasks)
 
     def acquire(self) -> bool:
         """尝试获取任务槽位。"""
@@ -254,7 +252,7 @@ class TaskConcurrencyLimiter:
             if self._current_tasks < self._max_tasks:
                 self._current_tasks += 1
                 logger.debug(
-                    "Task slot acquired: %s/%s", self._current_tasks, self._max_tasks
+                    "Task slot acquired: {}/{}", self._current_tasks, self._max_tasks
                 )
                 return True
             return False
@@ -270,7 +268,7 @@ class TaskConcurrencyLimiter:
             if self.acquire():
                 return True
             if time.time() - start_time > timeout:
-                logger.warning("Task slot acquisition timeout after %ss", timeout)
+                logger.warning("Task slot acquisition timeout after {}s", timeout)
                 return False
             time.sleep(0.5)
 
@@ -280,7 +278,7 @@ class TaskConcurrencyLimiter:
             if self._current_tasks > 0:
                 self._current_tasks -= 1
                 logger.debug(
-                    "Task slot released: %s/%s", self._current_tasks, self._max_tasks
+                    "Task slot released: {}/{}", self._current_tasks, self._max_tasks
                 )
 
     def get_status(self) -> Dict[str, Any]:

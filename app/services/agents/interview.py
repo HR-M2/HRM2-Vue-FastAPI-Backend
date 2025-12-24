@@ -5,12 +5,10 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Dict, Any, List, Optional
+from loguru import logger
 
 from .llm_client import get_llm_client
-
-logger = logging.getLogger(__name__)
 
 # ================== 提示词模板 ==================
 
@@ -211,13 +209,66 @@ CANDIDATE_QUESTIONS_PROMPT = """基于当前面试上下文，为面试官生成
 
 # 第一步：分析候选人回答类型
 请先判断候选人的回答属于哪种类型：
-- clarification_request: 候选人请求澄清问题
+- clarification_request: 候选人请求澄清问题、要求举例、要求进一步说明
 - counter_question: 候选人反问面试官
 - off_topic: 候选人回答偏离主题
 - normal_answer: 候选人正常回答问题
 
 # 第二步：根据回答类型生成候选问题
 请生成 {followup_count} 个追问问题（source: followup）+ {alternative_count} 个候选问题（source: resume 或 job）：
+
+1. 如果是 clarification_request：
+   - 生成对原问题的补充说明，给出具体示例或进一步解释
+   - 或者换一种更具体、更有针对性的方式重新提问
+   - 例如："比如您在XX公司主导了微服务改造项目，您能否具体说说当时的情况？您能否分享一个具体的项目经验和数据？"
+
+2. 如果是 counter_question：
+   - 简要回答候选人的问题后，回归到原始的问题
+   - 例如："关于XXX，我理解的是……您能否分享一下您的看法？"
+
+3. 如果是 off_topic：
+   - 礼貌地将候选人回答带回正题
+   - 或者从候选人的回答中找出可以深入讨论的点
+
+4. 如果是 normal_answer：
+   - 针对回答中值得深入讨论的点进行追问
+   - 或者转向简历/岗位要求中尚未覆盖的重要领域
+   - 避免重复已问过的问题
+   - 难度适中，能有效验证候选人能力
+
+# JSON返回格式
+{{
+    "answer_type": "回答类型：clarification_request/counter_question/off_topic/normal_answer",
+    "candidate_questions": [
+        {{
+            "question": "基于当前回答的追问问题",
+            "purpose": "验证XX能力",
+            "expected_skills": ["技能1"],
+            "source": "followup"
+        }},
+        {{
+            "question": "基于简历的问题",
+            "purpose": "考察XX经验",
+            "expected_skills": ["技能2"],
+            "source": "resume"
+        }},
+        {{
+            "question": "基于岗位要求的问题",
+            "purpose": "确认XX匹配度",
+            "expected_skills": ["技能3"],
+            "source": "job"
+        }}
+    ]
+}}
+
+重要：
+- 必须根据候选人的实际回答内容生成问题，不要忽略候选人的反馈
+- question 字段必须是完整的、可直接向候选人提出的问题
+- purpose 字段是简短的标签（5-10字）
+- source 字段用于区分问题来源：
+  * followup: 基于当前回答的追问（显示为"追问建议"）
+  * resume: 基于简历内容的问题（显示为"候选问题"）
+  * job: 基于岗位要求的问题（显示为"候选问题"）
 
 请直接返回JSON，不要包含其他内容。
 """
@@ -264,6 +315,18 @@ HR备注: {hr_notes}
 - 每个回答从6个维度评分（技术深度、实践经验、回答具体性、逻辑清晰度、诚实度、沟通能力）
 - 维度评分范围：1-4分
 - 最终标准化分数：0-100分
+- 评分解释：
+  * 90-100分：卓越 - 远超职位要求
+  * 75-89分：优秀 - 明显超出预期
+  * 60-74分：良好 - 符合期望
+  * 40-59分：一般 - 基本符合但有不足
+  * 25-39分：较差 - 明显低于要求
+  * 0-24分：不合格 - 严重不符合
+
+## 重要评估原则
+1. 追问结果权重最高：如果追问后表现下降，说明过度自信
+2. 关注实际深度而非表达流畅度
+3. 不要被候选人的高级术语和表面自信所迷惑
 
 ## JSON返回格式
 {{
@@ -290,15 +353,36 @@ HR备注: {hr_notes}
 请直接返回JSON，不要包含其他内容。"""
 
 CANDIDATE_TYPE_DESCRIPTIONS = {
-    "ideal": "理想候选人：结构清晰，数据充分，能解释原理，诚实表达边界。",
-    "junior": "初级候选人：回答较简短，承认不熟悉，态度谦虚。",
-    "nervous": "紧张型候选人：可能结巴或重复，用词犹豫，容易遗漏要点。",
-    "overconfident": "过度自信型：术语多但细节少，可能不懂装懂，缺少权衡。"
+    "ideal": """理想候选人特征：
+- 回答结构清晰，逻辑性强
+- 有具体的项目案例和数据支撑
+- 能深入解释技术原理
+- 表达流畅，善于总结
+- 诚实地认识自己的能力边界""",
+    "junior": """初级候选人特征：
+- 回答较简短，缺乏深度
+- 对进阶概念不太熟悉
+- 会坦诚说"这个我不太了解"或"我还在学习中"
+- 态度谦虚，愿意学习
+- 可能会说一些教科书式的答案""",
+    "nervous": """紧张型候选人特征：
+- 说话可能会结巴，如"嗯..."、"那个..."
+- 用词会重复，如"就是就是"、"然后然后"
+- 容易遗漏要点，回答不够完整
+- 可能需要一些停顿来组织语言
+- 实际能力可能比表现出来的要好""",
+    "overconfident": """过度自信型候选人特征：
+- 回答自信但缺乏具体细节
+- 喜欢使用高级术语但解释不清
+- 可能会不懂装懂，给出模糊的回答
+- 使用大量不确定词汇如"一般来说"、"差不多"、"应该是"
+- 缺乏对方案权衡的深入思考
+- 被追问细节时可能会暴露真实水平"""
 }
 
 
-class InterviewAgent:
-    """面试助手 Agent。"""
+class InterviewService:
+    """面试助手服务。"""
 
     def __init__(self, job_config: Dict[str, Any] | None = None):
         self.job_config = job_config or {}
@@ -326,7 +410,7 @@ class InterviewAgent:
         try:
             result = await self._llm.complete_json(system_prompt, user_prompt, temperature=0.7)
         except Exception as exc:
-            logger.error("生成简历问题失败: %s", exc)
+            logger.error("生成简历问题失败: {}", exc)
             return {"questions": [], "interest_points": []}
 
         questions = []
@@ -369,7 +453,7 @@ class InterviewAgent:
         try:
             result = await self._llm.complete_json(system_prompt, user_prompt, temperature=0.7)
         except Exception as exc:
-            logger.error("生成技能问题失败: %s", exc)
+            logger.error("生成技能问题失败: {}", exc)
             return []
 
         questions: List[Dict[str, Any]] = []
@@ -400,7 +484,7 @@ class InterviewAgent:
         try:
             return await self._llm.complete_json(system_prompt, user_prompt, temperature=0.3)
         except Exception as exc:
-            logger.error("回答评估失败: %s", exc)
+            logger.error("回答评估失败: {}", exc)
             return self._fallback_evaluation(answer)
 
     async def generate_followup_suggestions(
@@ -417,7 +501,7 @@ class InterviewAgent:
         try:
             return await self._llm.complete_json(system_prompt, user_prompt, temperature=0.6)
         except Exception as exc:
-            logger.error("追问建议生成失败: %s", exc)
+            logger.error("追问建议生成失败: {}", exc)
             return {
                 "followup_suggestions": [
                     {"question": "能否提供一个具体案例细节？", "purpose": "验证经验真实性", "difficulty": 6},
@@ -472,7 +556,7 @@ class InterviewAgent:
                 )
             return questions
         except Exception as exc:
-            logger.error("自适应问题生成失败: %s", exc)
+            logger.error("自适应问题生成失败: {}", exc)
             return []
 
     async def simulate_candidate_answer(
@@ -514,7 +598,7 @@ class InterviewAgent:
         try:
             return await self._llm.complete_json(system_prompt, user_prompt, temperature=0.4)
         except Exception as exc:
-            logger.error("最终报告生成失败: %s", exc)
+            logger.error("最终报告生成失败: {}", exc)
             return {
                 "overall_assessment": {
                     "recommendation_score": 50,
@@ -584,3 +668,14 @@ class InterviewAgent:
             role_label = "面试官" if msg.get("role") == "interviewer" else "候选人"
             lines.append(f"[{msg.get('seq', 0)}] **{role_label}**: {msg.get('content', '')}")
         return "\n".join(lines)
+
+
+_interview_service: InterviewService | None = None
+
+
+def get_interview_service(job_config: Dict[str, Any] | None = None) -> InterviewService:
+    """获取 InterviewService 单例。"""
+    global _interview_service
+    if _interview_service is None or job_config is not None:
+        _interview_service = InterviewService(job_config)
+    return _interview_service

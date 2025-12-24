@@ -3,12 +3,10 @@
 """
 from __future__ import annotations
 
-import logging
 from typing import Dict, Any, List, Optional
+from loguru import logger
 
 from .llm_client import get_llm_client, get_embedding_config
-
-logger = logging.getLogger(__name__)
 
 # ================= 提示词模板 =================
 
@@ -52,7 +50,7 @@ USER_PROMPT_POSITION = """请根据以下岗位描述生成招聘要求：
 请直接输出JSON格式的岗位要求，不要包含任何其他内容。"""
 
 
-class PositionAIService:
+class PositionService:
     """AI 生成岗位要求服务。"""
 
     def __init__(self):
@@ -133,16 +131,16 @@ class PositionAIService:
             resp = await embedding_client.embeddings.create(model=self.embedding_model, input=texts)
             return [item.embedding for item in resp.data]
         except Exception as exc:
-            logger.error("获取向量失败: %s", exc)
+            logger.error("获取向量失败: {}", exc)
             return []
 
 
-_position_ai_service: PositionAIService | None = None
+_position_service: PositionService | None = None
 
 
-def get_position_ai_service() -> PositionAIService:
-    """获取 PositionAIService 单例。"""
-    global _position_ai_service
-    if _position_ai_service is None:
-        _position_ai_service = PositionAIService()
-    return _position_ai_service
+def get_position_service() -> PositionService:
+    """获取 PositionService 单例。"""
+    global _position_service
+    if _position_service is None:
+        _position_service = PositionService()
+    return _position_service

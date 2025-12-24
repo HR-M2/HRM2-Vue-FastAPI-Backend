@@ -22,7 +22,7 @@ from app.schemas.analysis import (
     ComprehensiveAnalysisResponse,
     ComprehensiveAnalysisUpdate,
 )
-from app.services.agents import CandidateComprehensiveAnalyzer, get_llm_client
+from app.services.agents import AnalysisService, get_llm_client
 
 router = APIRouter()
 
@@ -113,7 +113,7 @@ async def create_analysis(
         interview_report = interview_session.report or {}
     
     # 执行 AI 综合分析
-    analyzer = CandidateComprehensiveAnalyzer(job_config)
+    analyzer = AnalysisService(job_config)
     ai_result = await analyzer.analyze(
         candidate_name=candidate_name,
         resume_content=resume_content,
