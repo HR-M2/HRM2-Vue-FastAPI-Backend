@@ -247,6 +247,15 @@ def get_llm_client() -> LLMClient:
     return LLMClient()
 
 
+def get_embedding_config() -> Dict[str, Any]:
+    """获取 Embedding 模型配置"""
+    return {
+        "model": getattr(settings, 'embedding_model', ''),
+        "api_key": getattr(settings, 'embedding_api_key', settings.llm_api_key),
+        "base_url": getattr(settings, 'embedding_base_url', settings.llm_base_url),
+    }
+
+
 class TaskConcurrencyLimiter:
     """
     任务级别的并发限制器。

@@ -5,8 +5,7 @@
 import logging
 from typing import Dict, Any, List, Optional
 
-from .llm_client import get_llm_client
-from .llm_config import get_embedding_config
+from .llm_client import get_llm_client, get_embedding_config
 
 logger = logging.getLogger(__name__)
 
