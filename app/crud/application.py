@@ -1,17 +1,25 @@
 """
 应聘申请 CRUD 操作 - SQLModel 简化版
+
+只保留有价值的业务查询，通用 CRUD 直接使用基类方法
 """
 from typing import Optional, List
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Application, ApplicationCreate, ApplicationUpdate
+from app.models import Application
 from .base import CRUDBase
 
 
 class CRUDApplication(CRUDBase[Application]):
-    """应聘申请 CRUD 操作类"""
+    """
+    应聘申请 CRUD 操作类
+    
+    通用方法直接使用基类：
+    - get(db, id) / get_multi(db, skip, limit) / count(db)
+    - create(db, obj_in) / update(db, db_obj, obj_in) / delete(db, id)
+    """
     
     async def get_with_relations(self, db: AsyncSession, id: str) -> Optional[Application]:
         """获取申请详情（含所有关联数据），排除软删除"""
@@ -28,11 +36,6 @@ class CRUDApplication(CRUDBase[Application]):
             .where(and_(self.model.id == id, self.model.is_deleted == False))
         )
         return result.scalar_one_or_none()
-    
-    # 别名，保持与原版兼容
-    async def get_detail(self, db: AsyncSession, id: str) -> Optional[Application]:
-        """get_with_relations 的别名"""
-        return await self.get_with_relations(db, id)
     
     async def get_by_position(
         self,
@@ -147,27 +150,8 @@ class CRUDApplication(CRUDBase[Application]):
         await db.refresh(db_obj)
         return db_obj
     
-    async def create_application(
-        self,
-        db: AsyncSession,
-        *,
-        obj_in: ApplicationCreate
-    ) -> Application:
-        """创建申请"""
-        return await self.create(db, obj_in=obj_in)
-    
-    async def update_application(
-        self,
-        db: AsyncSession,
-        *,
-        db_obj: Application,
-        obj_in: ApplicationUpdate
-    ) -> Application:
-        """更新申请"""
-        return await self.update(db, db_obj=db_obj, obj_in=obj_in)
-    
     async def soft_delete(self, db: AsyncSession, id: str) -> bool:
-        """软删除"""
+        """软删除 - 业务逻辑"""
         obj = await self.get(db, id)
         if obj:
             obj.is_deleted = True
@@ -175,6 +159,28 @@ class CRUDApplication(CRUDBase[Application]):
             await db.refresh(obj)
             return True
         return False
+    
+    async def get_list_with_relations(
+        self,
+        db: AsyncSession,
+        *,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Application]:
+        """获取申请列表（含基本关联数据），排除软删除"""
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.position),
+                selectinload(self.model.resume),
+                selectinload(self.model.screening_task),
+            )
+            .where(self.model.is_deleted == False)
+            .order_by(self.model.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
 
 
 application_crud = CRUDApplication(Application)

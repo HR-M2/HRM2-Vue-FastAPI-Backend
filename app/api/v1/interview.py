@@ -68,7 +68,7 @@ async def create_interview_session(
     创建新的面试会话
     """
     # 验证应聘申请存在
-    application = await application_crud.get_detail(db, data.application_id)
+    application = await application_crud.get_with_relations(db, data.application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {data.application_id}")
     
@@ -77,7 +77,7 @@ async def create_interview_session(
     if existing_session:
         await interview_crud.delete(db, id=existing_session.id)
     
-    session = await interview_crud.create_session(db, obj_in=data)
+    session = await interview_crud.create(db, obj_in=data)
     
     response = InterviewSessionResponse.model_validate(session)
     response.messages = []
@@ -144,7 +144,7 @@ async def generate_questions(
     
     # 更新问题池
     update_data = InterviewSessionUpdate(question_pool=questions)
-    session = await interview_crud.update_session(
+    session = await interview_crud.update(
         db, db_obj=session, obj_in=update_data
     )
     
@@ -216,7 +216,7 @@ async def complete_session(
         report_markdown="# 面试报告\n\n待 AI 服务生成..."
     )
     
-    session = await interview_crud.update_session(
+    session = await interview_crud.update(
         db, db_obj=session, obj_in=update_data
     )
     

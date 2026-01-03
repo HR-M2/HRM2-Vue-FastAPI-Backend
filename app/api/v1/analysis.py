@@ -76,7 +76,7 @@ async def create_analysis(
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 验证应聘申请存在
-    application = await application_crud.get_detail(db, data.application_id)
+    application = await application_crud.get_with_relations(db, data.application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {data.application_id}")
     
@@ -147,13 +147,13 @@ async def create_analysis(
     if existing_analysis:
         # 更新已有分析记录
         update_data = ComprehensiveAnalysisUpdate(**analysis_result)
-        analysis = await analysis_crud.update_analysis(
+        analysis = await analysis_crud.update(
             db, db_obj=existing_analysis, obj_in=update_data
         )
         message = "综合分析已更新"
     else:
         # 创建新分析记录
-        analysis = await analysis_crud.create_analysis(
+        analysis = await analysis_crud.create_with_result(
             db, obj_in=data, analysis_result=analysis_result
         )
         message = "综合分析创建成功"

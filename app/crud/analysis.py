@@ -1,5 +1,7 @@
 """
 综合分析 CRUD 操作 - SQLModel 简化版
+
+只保留有价值的业务查询，通用 CRUD 直接使用基类方法
 """
 from typing import Optional, List, Union
 from sqlalchemy import select
@@ -9,7 +11,6 @@ from sqlalchemy.orm import selectinload
 from app.models import (
     ComprehensiveAnalysis, 
     ComprehensiveAnalysisCreate,
-    ComprehensiveAnalysisUpdate,
     RecommendationLevel,
     Application,
 )
@@ -17,10 +18,16 @@ from .base import CRUDBase
 
 
 class CRUDAnalysis(CRUDBase[ComprehensiveAnalysis]):
-    """综合分析 CRUD 操作类"""
+    """
+    综合分析 CRUD 操作类
+    
+    通用方法直接使用基类：
+    - get(db, id) / get_multi(db, skip, limit) / count(db)
+    - create(db, obj_in) / update(db, db_obj, obj_in) / delete(db, id)
+    """
     
     async def get_with_application(self, db: AsyncSession, id: str) -> Optional[ComprehensiveAnalysis]:
-        """获取综合分析（含申请信息）"""
+        """获取综合分析（含申请信息）- 需要 selectinload"""
         result = await db.execute(
             select(self.model)
             .options(
@@ -34,7 +41,7 @@ class CRUDAnalysis(CRUDBase[ComprehensiveAnalysis]):
         return result.scalar_one_or_none()
     
     async def get_by_application(self, db: AsyncSession, application_id: str) -> Optional[ComprehensiveAnalysis]:
-        """根据申请ID获取综合分析（1:1关系）"""
+        """根据申请ID获取综合分析（1:1关系）- 业务查询"""
         result = await db.execute(
             select(self.model).where(self.model.application_id == application_id)
         )
@@ -48,7 +55,7 @@ class CRUDAnalysis(CRUDBase[ComprehensiveAnalysis]):
         skip: int = 0,
         limit: int = 100
     ) -> List[ComprehensiveAnalysis]:
-        """根据推荐等级获取列表（支持字符串或枚举）"""
+        """根据推荐等级获取列表（支持字符串或枚举）- 带条件筛选"""
         level_value = recommendation_level.value if isinstance(recommendation_level, RecommendationLevel) else recommendation_level
         result = await db.execute(
             select(self.model)
@@ -59,7 +66,7 @@ class CRUDAnalysis(CRUDBase[ComprehensiveAnalysis]):
         )
         return list(result.scalars().all())
     
-    async def create_analysis(
+    async def create_with_result(
         self,
         db: AsyncSession,
         *,
@@ -67,23 +74,13 @@ class CRUDAnalysis(CRUDBase[ComprehensiveAnalysis]):
         analysis_result: dict
     ) -> ComprehensiveAnalysis:
         """
-        创建综合分析
+        创建综合分析 - 合并 Create Schema 和 AI 分析结果
         
-        合并 Create Schema 和 AI 分析结果
+        这是业务方法，不是薄包装
         """
         data = obj_in.model_dump()
         data.update(analysis_result)
         return await self.create(db, obj_in=data)
-    
-    async def update_analysis(
-        self,
-        db: AsyncSession,
-        *,
-        db_obj: ComprehensiveAnalysis,
-        obj_in: ComprehensiveAnalysisUpdate
-    ) -> ComprehensiveAnalysis:
-        """更新综合分析"""
-        return await self.update(db, db_obj=db_obj, obj_in=obj_in)
 
 
 analysis_crud = CRUDAnalysis(ComprehensiveAnalysis)
