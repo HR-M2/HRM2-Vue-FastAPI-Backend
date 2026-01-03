@@ -16,8 +16,8 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException, BadRequestException
 from app.crud import analysis_crud, application_crud, screening_crud, interview_crud
-from app.models.analysis import RecommendationLevel
-from app.schemas.analysis import (
+from app.models import (
+    RecommendationLevel,
     ComprehensiveAnalysisCreate,
     ComprehensiveAnalysisResponse,
     ComprehensiveAnalysisUpdate,

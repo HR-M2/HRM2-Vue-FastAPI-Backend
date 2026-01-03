@@ -20,7 +20,7 @@ from app.core.database import get_db
 from app.core.response import success_response, ResponseModel, DictResponse
 from app.core.exceptions import NotFoundException, BadRequestException
 from app.crud import position_crud, application_crud, screening_crud, interview_crud, resume_crud
-from app.schemas.resume import ResumeCreate
+from app.models import ResumeCreate
 from app.services.agents import (
     get_position_service,
     get_llm_client,
@@ -316,7 +316,7 @@ async def start_ai_screening(
     }
     
     # 创建筛选任务
-    from app.schemas.screening import ScreeningTaskCreate
+    from app.models import ScreeningTaskCreate
     task_data = ScreeningTaskCreate(application_id=data.application_id)
     task = await screening_crud.create_task(db, obj_in=task_data)
     
@@ -396,7 +396,7 @@ async def ai_generate_initial_questions(
     )
     
     # 更新会话的问题池
-    from app.schemas.interview import InterviewSessionUpdate
+    from app.models import InterviewSessionUpdate
     questions_text = [q["question"] for q in result.get("questions", [])]
     update_data = InterviewSessionUpdate(question_pool=questions_text)
     await interview_crud.update_session(db, db_obj=session, obj_in=update_data)
@@ -551,7 +551,7 @@ async def ai_generate_report(
     )
     
     # 更新会话
-    from app.schemas.interview import InterviewSessionUpdate
+    from app.models import InterviewSessionUpdate
     final_score = report.get("overall_assessment", {}).get("recommendation_score", 0)
     update_data = InterviewSessionUpdate(
         is_completed=True,

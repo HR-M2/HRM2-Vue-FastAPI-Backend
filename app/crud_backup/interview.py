@@ -1,20 +1,26 @@
 """
-面试会话 CRUD 操作 - SQLModel 简化版
+面试会话 CRUD 操作
 """
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import InterviewSession, InterviewSessionCreate, InterviewSessionUpdate, Application
+from app.models.interview import InterviewSession
+from app.models.application import Application
+from app.schemas.interview import InterviewSessionCreate, InterviewSessionUpdate
 from .base import CRUDBase
 
 
 class CRUDInterview(CRUDBase[InterviewSession]):
     """面试会话 CRUD 操作类"""
     
-    async def get_with_application(self, db: AsyncSession, id: str) -> Optional[InterviewSession]:
-        """获取面试会话（含申请信息）"""
+    async def get_with_application(
+        self,
+        db: AsyncSession,
+        id: str
+    ) -> Optional[InterviewSession]:
+        """获取会话详情（含申请信息）"""
         result = await db.execute(
             select(self.model)
             .options(
@@ -27,14 +33,22 @@ class CRUDInterview(CRUDBase[InterviewSession]):
         )
         return result.scalar_one_or_none()
     
-    async def get_by_application(self, db: AsyncSession, application_id: str) -> Optional[InterviewSession]:
-        """根据申请ID获取面试会话（1:1关系）"""
+    async def get_by_application(
+        self,
+        db: AsyncSession,
+        application_id: str
+    ) -> Optional[InterviewSession]:
+        """获取某申请的面试会话（1:1关系）"""
         result = await db.execute(
-            select(self.model).where(self.model.application_id == application_id)
+            select(self.model)
+            .where(self.model.application_id == application_id)
         )
         return result.scalar_one_or_none()
     
-    async def count_completed(self, db: AsyncSession) -> int:
+    async def count_completed(
+        self,
+        db: AsyncSession
+    ) -> int:
         """统计已完成面试会话数量"""
         result = await db.execute(
             select(func.count())
@@ -50,7 +64,7 @@ class CRUDInterview(CRUDBase[InterviewSession]):
         obj_in: InterviewSessionCreate
     ) -> InterviewSession:
         """创建面试会话"""
-        return await self.create(db, obj_in=obj_in)
+        return await self.create(db, obj_in=obj_in.model_dump())
     
     async def update_session(
         self,
@@ -59,8 +73,8 @@ class CRUDInterview(CRUDBase[InterviewSession]):
         db_obj: InterviewSession,
         obj_in: InterviewSessionUpdate
     ) -> InterviewSession:
-        """更新面试会话"""
-        return await self.update(db, db_obj=db_obj, obj_in=obj_in)
+        update_data = obj_in.model_dump(exclude_unset=True)
+        return await self.update(db, db_obj=db_obj, obj_in=update_data)
 
 
 interview_crud = CRUDInterview(InterviewSession)

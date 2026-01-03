@@ -16,7 +16,7 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException, ConflictException
 from app.crud import application_crud, position_crud, resume_crud, screening_crud, interview_crud, analysis_crud
-from app.schemas.application import (
+from app.models import (
     ApplicationCreate,
     ApplicationUpdate,
     ApplicationResponse,
@@ -58,7 +58,7 @@ async def get_applications(
         )
         total = await application_crud.count(db)
     
-    from app.schemas.application import (
+    from app.models import (
         ScreeningTaskBrief, InterviewSessionBrief, 
         VideoAnalysisBrief, ComprehensiveAnalysisBrief
     )

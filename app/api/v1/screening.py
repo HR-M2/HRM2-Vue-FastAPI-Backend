@@ -18,8 +18,8 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException
 from app.crud import screening_crud, application_crud
-from app.models.screening import TaskStatus
-from app.schemas.screening import (
+from app.models import (
+    TaskStatus,
     ScreeningTaskCreate,
     ScreeningTaskResponse,
     ScreeningResultUpdate,

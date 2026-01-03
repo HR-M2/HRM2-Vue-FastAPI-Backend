@@ -1,19 +1,24 @@
 """
-简历 CRUD 操作 - SQLModel 简化版
+简历 CRUD 操作
 """
-from typing import Optional, List, Dict
+from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Resume, ResumeCreate, ResumeUpdate
+from app.models.resume import Resume
+from app.schemas.resume import ResumeCreate, ResumeUpdate
 from .base import CRUDBase
 
 
 class CRUDResume(CRUDBase[Resume]):
     """简历 CRUD 操作类"""
     
-    async def get_with_applications(self, db: AsyncSession, id: str) -> Optional[Resume]:
+    async def get_with_applications(
+        self,
+        db: AsyncSession,
+        id: str
+    ) -> Optional[Resume]:
         """获取简历详情（含申请列表）"""
         result = await db.execute(
             select(self.model)
@@ -22,14 +27,18 @@ class CRUDResume(CRUDBase[Resume]):
         )
         return result.scalar_one_or_none()
     
-    async def get_by_hash(self, db: AsyncSession, file_hash: str) -> Optional[Resume]:
+    async def get_by_hash(
+        self,
+        db: AsyncSession,
+        file_hash: str
+    ) -> Optional[Resume]:
         """根据文件哈希查找（去重用）"""
         result = await db.execute(
             select(self.model).where(self.model.file_hash == file_hash)
         )
         return result.scalar_one_or_none()
     
-    async def search_by_name(
+    async def get_by_candidate_name(
         self,
         db: AsyncSession,
         name: str,
@@ -47,36 +56,6 @@ class CRUDResume(CRUDBase[Resume]):
         )
         return list(result.scalars().all())
     
-    # 别名，保持与原版兼容
-    async def get_by_candidate_name(
-        self,
-        db: AsyncSession,
-        name: str,
-        *,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Resume]:
-        """search_by_name 的别名"""
-        return await self.search_by_name(db, name, skip=skip, limit=limit)
-    
-    async def check_hash_exists(self, db: AsyncSession, file_hash: str) -> bool:
-        """检查文件哈希是否已存在"""
-        resume = await self.get_by_hash(db, file_hash)
-        return resume is not None
-    
-    async def check_hashes_batch(
-        self,
-        db: AsyncSession,
-        file_hashes: List[str]
-    ) -> Dict[str, bool]:
-        """批量检查文件哈希是否已存在"""
-        result = await db.execute(
-            select(self.model.file_hash)
-            .where(self.model.file_hash.in_(file_hashes))
-        )
-        existing = set(result.scalars().all())
-        return {h: h in existing for h in file_hashes}
-    
     async def create_resume(
         self,
         db: AsyncSession,
@@ -84,7 +63,7 @@ class CRUDResume(CRUDBase[Resume]):
         obj_in: ResumeCreate
     ) -> Resume:
         """创建简历"""
-        return await self.create(db, obj_in=obj_in)
+        return await self.create(db, obj_in=obj_in.model_dump())
     
     async def update_resume(
         self,
@@ -94,14 +73,47 @@ class CRUDResume(CRUDBase[Resume]):
         obj_in: ResumeUpdate
     ) -> Resume:
         """更新简历"""
-        return await self.update(db, db_obj=db_obj, obj_in=obj_in)
+        update_data = obj_in.model_dump(exclude_unset=True)
+        return await self.update(db, db_obj=db_obj, obj_in=update_data)
     
-    async def delete_batch(self, db: AsyncSession, ids: List[str]) -> int:
-        """批量删除简历"""
+    async def check_hash_exists(
+        self,
+        db: AsyncSession,
+        file_hash: str
+    ) -> bool:
+        """检查文件哈希是否已存在"""
+        resume = await self.get_by_hash(db, file_hash)
+        return resume is not None
+    
+    async def check_hashes_batch(
+        self,
+        db: AsyncSession,
+        file_hashes: List[str]
+    ) -> dict:
+        """批量检查文件哈希是否已存在"""
+        result = await db.execute(
+            select(self.model.file_hash)
+            .where(self.model.file_hash.in_(file_hashes))
+        )
+        existing_hashes = set(result.scalars().all())
+        return {
+            h: h in existing_hashes
+            for h in file_hashes
+        }
+    
+    async def delete_batch(
+        self,
+        db: AsyncSession,
+        ids: List[str]
+    ) -> int:
+        """批量删除简历，返回删除数量"""
         count = 0
         for id in ids:
-            if await self.delete(db, id=id):
+            resume = await self.get(db, id)
+            if resume:
+                await db.delete(resume)
                 count += 1
+        await db.commit()
         return count
 
 

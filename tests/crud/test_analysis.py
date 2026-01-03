@@ -10,7 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import analysis_crud
-from app.schemas.analysis import ComprehensiveAnalysisCreate
+from app.models import ComprehensiveAnalysisCreate
 from tests.conftest import DataFactory
 
 

@@ -1,20 +1,26 @@
 """
-筛选任务 CRUD 操作 - SQLModel 简化版
+筛选任务 CRUD 操作
 """
-from typing import Optional, List, Union
+from typing import Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import ScreeningTask, ScreeningTaskCreate, ScreeningResultUpdate, TaskStatus, Application
+from app.models.screening import ScreeningTask
+from app.models.application import Application
+from app.schemas.screening import ScreeningTaskCreate, ScreeningResultUpdate
 from .base import CRUDBase
 
 
 class CRUDScreening(CRUDBase[ScreeningTask]):
     """筛选任务 CRUD 操作类"""
     
-    async def get_with_application(self, db: AsyncSession, id: str) -> Optional[ScreeningTask]:
-        """获取筛选任务（含申请信息）"""
+    async def get_with_application(
+        self,
+        db: AsyncSession,
+        id: str
+    ) -> Optional[ScreeningTask]:
+        """获取任务详情（含申请信息）"""
         result = await db.execute(
             select(self.model)
             .options(
@@ -27,39 +33,46 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
         )
         return result.scalar_one_or_none()
     
-    async def get_by_application(self, db: AsyncSession, application_id: str) -> Optional[ScreeningTask]:
-        """根据申请ID获取筛选任务（1:1关系）"""
+    async def get_by_application(
+        self,
+        db: AsyncSession,
+        application_id: str
+    ) -> Optional[ScreeningTask]:
+        """获取某申请的筛选任务（1:1关系）"""
         result = await db.execute(
-            select(self.model).where(self.model.application_id == application_id)
+            select(self.model)
+            .where(self.model.application_id == application_id)
         )
         return result.scalar_one_or_none()
     
     async def get_by_status(
         self,
         db: AsyncSession,
-        status: Union[str, TaskStatus],
+        status: str,
         *,
         skip: int = 0,
         limit: int = 100
-    ) -> List[ScreeningTask]:
-        """根据状态获取任务列表（支持字符串或枚举）"""
-        status_value = status.value if isinstance(status, TaskStatus) else status
+    ) -> list[ScreeningTask]:
+        """获取某状态的所有任务"""
         result = await db.execute(
             select(self.model)
-            .where(self.model.status == status_value)
+            .where(self.model.status == status)
             .order_by(self.model.created_at.desc())
             .offset(skip)
             .limit(limit)
         )
         return list(result.scalars().all())
     
-    async def count_by_status(self, db: AsyncSession, status: Union[str, TaskStatus]) -> int:
+    async def count_by_status(
+        self,
+        db: AsyncSession,
+        status: str
+    ) -> int:
         """统计某状态的任务数量"""
-        status_value = status.value if isinstance(status, TaskStatus) else status
         result = await db.execute(
             select(func.count())
             .select_from(self.model)
-            .where(self.model.status == status_value)
+            .where(self.model.status == status)
         )
         return result.scalar() or 0
     
@@ -70,7 +83,7 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
         status: str = None,
         skip: int = 0,
         limit: int = 100
-    ) -> List[ScreeningTask]:
+    ) -> list[ScreeningTask]:
         """获取任务列表（包含关联的申请、简历、岗位信息）"""
         query = select(self.model).options(
             selectinload(self.model.application)
@@ -93,7 +106,7 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
         obj_in: ScreeningTaskCreate
     ) -> ScreeningTask:
         """创建筛选任务"""
-        return await self.create(db, obj_in=obj_in)
+        return await self.create(db, obj_in=obj_in.model_dump())
     
     async def update_result(
         self,
@@ -103,7 +116,8 @@ class CRUDScreening(CRUDBase[ScreeningTask]):
         obj_in: ScreeningResultUpdate
     ) -> ScreeningTask:
         """更新筛选结果"""
-        return await self.update(db, db_obj=db_obj, obj_in=obj_in)
+        update_data = obj_in.model_dump(exclude_unset=True)
+        return await self.update(db, db_obj=db_obj, obj_in=update_data)
 
 
 screening_crud = CRUDScreening(ScreeningTask)

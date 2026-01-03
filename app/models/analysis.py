@@ -1,12 +1,12 @@
 """
-综合分析模型模块
+综合分析模型模块 - SQLModel 版本
 """
-from typing import TYPE_CHECKING, Optional
+from typing import Optional, Dict, List, TYPE_CHECKING
 from enum import Enum
-from sqlalchemy import String, Text, Float, ForeignKey, JSON, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlmodel import SQLModel, Field, Relationship, Column, JSON, UniqueConstraint
+from sqlalchemy import Column as SAColumn, String, ForeignKey
 
-from .base import BaseModel
+from .base import SQLModelBase, TimestampMixin, IDMixin, TimestampResponse
 
 if TYPE_CHECKING:
     from .application import Application
@@ -14,84 +14,107 @@ if TYPE_CHECKING:
 
 class RecommendationLevel(str, Enum):
     """推荐等级枚举"""
-    STRONGLY_RECOMMENDED = "strongly_recommended"  # 强烈推荐
-    RECOMMENDED = "recommended"                    # 推荐
-    CONDITIONAL = "conditional"                    # 有条件推荐
-    NOT_RECOMMENDED = "not_recommended"            # 不推荐
+    STRONGLY_RECOMMENDED = "strongly_recommended"
+    RECOMMENDED = "recommended"
+    CONDITIONAL = "conditional"
+    NOT_RECOMMENDED = "not_recommended"
 
 
-class ComprehensiveAnalysis(BaseModel):
-    """
-    综合分析模型
-    
-    整合简历筛选、视频分析、面试记录等数据，
-    基于 Rubric 量表进行多维度评估
-    """
+# ==================== 嵌套 Schema ====================
+
+class DimensionScoreItem(SQLModelBase):
+    """单个维度评分项"""
+    dimension_score: Optional[int] = Field(None, ge=1, le=5, description="维度评分(1-5)")
+    dimension_name: Optional[str] = Field(None, description="维度名称")
+    weight: Optional[float] = Field(None, description="权重")
+    sub_scores: Optional[Dict[str, int]] = Field(None, description="子维度评分")
+    strengths: Optional[List[str]] = Field(None, description="优势列表")
+    weaknesses: Optional[List[str]] = Field(None, description="不足列表")
+    analysis: Optional[str] = Field(None, description="详细分析说明")
+
+
+# ==================== 表模型 ====================
+
+class ComprehensiveAnalysis(TimestampMixin, IDMixin, SQLModel, table=True):
+    """综合分析表模型"""
     __tablename__ = "comprehensive_analyses"
     __table_args__ = (
         UniqueConstraint('application_id', name='uq_comprehensive_analysis_application'),
     )
     
-    # ========== 外键关联 ==========
-    application_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("applications.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-        index=True,
-        comment="应聘申请ID"
+    # 外键
+    application_id: str = Field(
+        sa_column=SAColumn(String, ForeignKey("applications.id", ondelete="CASCADE"), unique=True, index=True, nullable=False),
+        description="应聘申请ID"
     )
     
-    # ========== 综合评分 ==========
-    final_score: Mapped[float] = mapped_column(
-        Float,
-        nullable=False,
-        comment="综合得分(0-100)"
+    # 综合评分
+    final_score: float = Field(..., ge=0, le=100, description="综合得分")
+    
+    # 推荐结果
+    recommendation_level: str = Field(
+        RecommendationLevel.CONDITIONAL.value,
+        max_length=30,
+        description="推荐等级"
+    )
+    recommendation_reason: Optional[str] = Field(None, description="推荐理由")
+    suggested_action: Optional[str] = Field(None, description="建议行动")
+    
+    # 各维度评分
+    dimension_scores: Optional[dict] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description="各维度评分详情"
     )
     
-    # ========== 推荐结果 ==========
-    recommendation_level: Mapped[str] = mapped_column(
-        String(30),
-        default=RecommendationLevel.CONDITIONAL.value,
-        comment="推荐等级"
-    )
-    recommendation_reason: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="推荐理由"
-    )
-    suggested_action: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="建议行动"
+    # 分析报告
+    report: Optional[str] = Field(None, description="综合分析报告(Markdown)")
+    
+    # 输入数据快照
+    input_snapshot: Optional[dict] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description="输入数据快照"
     )
     
-    # ========== 各维度评分 ==========
-    dimension_scores: Mapped[Optional[dict]] = mapped_column(
-        JSON,
-        default=dict,
-        comment="各维度评分详情"
-    )
-    
-    # ========== 分析报告 ==========
-    report: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="综合分析报告(Markdown)"
-    )
-    
-    # ========== 输入数据快照 ==========
-    input_snapshot: Mapped[Optional[dict]] = mapped_column(
-        JSON,
-        default=dict,
-        comment="输入数据快照(便于追溯)"
-    )
-    
-    # ========== 关联关系 ==========
-    application: Mapped["Application"] = relationship(
-        "Application",
-        back_populates="comprehensive_analysis"
-    )
+    # 关联关系
+    application: Optional["Application"] = Relationship(back_populates="comprehensive_analysis")
     
     def __repr__(self) -> str:
         return f"<ComprehensiveAnalysis(id={self.id}, score={self.final_score})>"
+
+
+# ==================== 请求 Schema ====================
+
+class ComprehensiveAnalysisCreate(SQLModelBase):
+    """创建综合分析请求"""
+    application_id: str = Field(..., description="应聘申请ID")
+
+
+class ComprehensiveAnalysisUpdate(SQLModelBase):
+    """更新综合分析请求"""
+    final_score: Optional[float] = Field(None, ge=0, le=100, description="综合得分")
+    recommendation_level: Optional[str] = Field(None, description="推荐等级")
+    recommendation_reason: Optional[str] = Field(None, description="推荐理由")
+    suggested_action: Optional[str] = Field(None, description="建议行动")
+    dimension_scores: Optional[Dict] = Field(None, description="各维度评分")
+    report: Optional[str] = Field(None, description="分析报告")
+    input_snapshot: Optional[Dict] = Field(None, description="输入数据快照")
+
+
+# ==================== 响应 Schema ====================
+
+class ComprehensiveAnalysisResponse(TimestampResponse):
+    """综合分析响应"""
+    application_id: str
+    final_score: float
+    recommendation_level: str
+    recommendation_reason: Optional[str]
+    suggested_action: Optional[str]
+    dimension_scores: Dict[str, DimensionScoreItem] = Field(default_factory=dict)
+    report: Optional[str]
+    input_snapshot: Dict
+    
+    # 关联信息
+    candidate_name: Optional[str] = None
+    position_title: Optional[str] = None

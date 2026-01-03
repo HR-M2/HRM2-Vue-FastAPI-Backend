@@ -1,12 +1,12 @@
 """
-简历筛选任务模型模块
+简历筛选任务模型模块 - SQLModel 版本
 """
-from typing import TYPE_CHECKING, Optional
+from typing import Optional, TYPE_CHECKING
 from enum import Enum
-from sqlalchemy import String, Text, Float, ForeignKey, JSON, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlmodel import SQLModel, Field, Relationship, Column, JSON, UniqueConstraint
+from sqlalchemy import Column as SAColumn, String, ForeignKey
 
-from .base import BaseModel
+from .base import SQLModelBase, TimestampMixin, IDMixin, TimestampResponse
 
 if TYPE_CHECKING:
     from .application import Application
@@ -14,80 +14,87 @@ if TYPE_CHECKING:
 
 class TaskStatus(str, Enum):
     """任务状态枚举"""
-    PENDING = "pending"        # 等待中
-    RUNNING = "running"        # 运行中
-    COMPLETED = "completed"    # 已完成
-    FAILED = "failed"          # 失败
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
-class ScreeningTask(BaseModel):
-    """
-    简历筛选任务模型
-    
-    存储 AI 简历筛选的过程和结果
-    """
+# ==================== 嵌套 Schema ====================
+
+class ScreeningScore(SQLModelBase):
+    """筛选评分详情"""
+    comprehensive_score: Optional[float] = Field(None, ge=0, le=100, description="综合评分")
+    hr_score: Optional[int] = Field(None, description="HR评分")
+    technical_score: Optional[int] = Field(None, description="技术评分")
+    manager_score: Optional[int] = Field(None, description="管理评分")
+
+
+# ==================== 表模型 ====================
+
+class ScreeningTask(TimestampMixin, IDMixin, SQLModel, table=True):
+    """简历筛选任务表模型"""
     __tablename__ = "screening_tasks"
     __table_args__ = (
         UniqueConstraint('application_id', name='uq_screening_task_application'),
     )
     
-    # ========== 外键关联 ==========
-    application_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("applications.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-        index=True,
-        comment="应聘申请ID"
+    # 外键
+    application_id: str = Field(
+        sa_column=SAColumn(String, ForeignKey("applications.id", ondelete="CASCADE"), unique=True, index=True, nullable=False),
+        description="应聘申请ID"
     )
     
-    # ========== 任务状态 ==========
-    status: Mapped[str] = mapped_column(
-        String(20),
-        default=TaskStatus.PENDING.value,
-        index=True,
-        comment="任务状态"
-    )
-    error_message: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="错误信息"
-    )
+    # 任务状态
+    status: str = Field(TaskStatus.PENDING.value, index=True, description="任务状态")
+    error_message: Optional[str] = Field(None, description="错误信息")
     
-    # ========== 筛选结果 ==========
-    score: Mapped[Optional[float]] = mapped_column(
-        Float,
-        nullable=True,
-        comment="综合评分(0-100)"
-    )
-    dimension_scores: Mapped[Optional[dict]] = mapped_column(
-        JSON,
-        nullable=True,
-        comment="各维度评分详情"
-    )
-    summary: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="筛选总结"
-    )
-    recommendation: Mapped[Optional[str]] = mapped_column(
-        String(20),
-        nullable=True,
-        comment="推荐结果: strong/moderate/weak"
-    )
+    # 筛选结果
+    score: Optional[float] = Field(None, ge=0, le=100, description="综合评分")
+    dimension_scores: Optional[dict] = Field(default=None, sa_column=Column(JSON), description="各维度评分")
+    summary: Optional[str] = Field(None, description="筛选总结")
+    recommendation: Optional[str] = Field(None, max_length=20, description="推荐结果")
+    report_content: Optional[str] = Field(None, description="报告内容(Markdown)")
     
-    # ========== 报告存储 ==========
-    report_content: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="报告内容(Markdown)"
-    )
-    
-    # ========== 关联关系 ==========
-    application: Mapped["Application"] = relationship(
-        "Application",
-        back_populates="screening_task"
-    )
+    # 关联关系
+    application: Optional["Application"] = Relationship(back_populates="screening_task")
     
     def __repr__(self) -> str:
         return f"<ScreeningTask(id={self.id}, status={self.status})>"
+
+
+# ==================== 请求 Schema ====================
+
+class ScreeningTaskCreate(SQLModelBase):
+    """创建筛选任务请求"""
+    application_id: str = Field(..., description="应聘申请ID")
+
+
+class ScreeningResultUpdate(SQLModelBase):
+    """更新筛选结果请求"""
+    status: Optional[str] = Field(None, description="任务状态")
+    score: Optional[float] = Field(None, ge=0, le=100, description="综合评分")
+    dimension_scores: Optional[ScreeningScore] = Field(None, description="各维度评分")
+    summary: Optional[str] = Field(None, description="筛选总结")
+    recommendation: Optional[str] = Field(None, description="推荐结果")
+    report_content: Optional[str] = Field(None, description="报告内容")
+    error_message: Optional[str] = Field(None, description="错误信息")
+
+
+# ==================== 响应 Schema ====================
+
+class ScreeningTaskResponse(TimestampResponse):
+    """筛选任务响应"""
+    application_id: str
+    status: str
+    score: Optional[float]
+    dimension_scores: Optional[ScreeningScore] = None
+    summary: Optional[str]
+    recommendation: Optional[str]
+    report_content: Optional[str]
+    error_message: Optional[str]
+    
+    # 关联信息
+    candidate_name: Optional[str] = None
+    position_title: Optional[str] = None
+    resume_content: Optional[str] = None

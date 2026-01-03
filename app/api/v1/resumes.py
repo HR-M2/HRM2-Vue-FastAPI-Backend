@@ -17,7 +17,7 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException, ConflictException
 from app.crud import resume_crud
-from app.schemas.resume import (
+from app.models import (
     ResumeCreate,
     ResumeUpdate,
     ResumeResponse,

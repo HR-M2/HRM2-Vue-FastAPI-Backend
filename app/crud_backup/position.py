@@ -1,22 +1,21 @@
 """
-岗位 CRUD 操作 - SQLModel 简化版
-
-移除了薄包装方法，只保留有价值的业务查询
+岗位 CRUD 操作
 """
 from typing import Optional, List
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Position, PositionCreate, PositionUpdate
+from app.models.position import Position
+from app.schemas.position import PositionCreate, PositionUpdate
 from .base import CRUDBase
 
 
 class CRUDPosition(CRUDBase[Position]):
     """岗位 CRUD 操作类"""
     
-    async def get_with_applications(self, db: AsyncSession, id: str) -> Optional[Position]:
-        """获取岗位详情（含申请列表）"""
+    async def get_with_count(self, db: AsyncSession, id: str) -> Optional[Position]:
+        """获取岗位详情（含申请数量）"""
         result = await db.execute(
             select(self.model)
             .options(selectinload(self.model.applications))
@@ -24,19 +23,18 @@ class CRUDPosition(CRUDBase[Position]):
         )
         return result.scalar_one_or_none()
     
-    # 别名，保持与原版兼容
-    async def get_with_count(self, db: AsyncSession, id: str) -> Optional[Position]:
-        """get_with_applications 的别名"""
-        return await self.get_with_applications(db, id)
-    
-    async def get_by_title(self, db: AsyncSession, title: str) -> Optional[Position]:
+    async def get_by_title(
+        self,
+        db: AsyncSession,
+        title: str
+    ) -> Optional[Position]:
         """根据岗位名称查找"""
         result = await db.execute(
             select(self.model).where(self.model.title == title)
         )
         return result.scalar_one_or_none()
     
-    async def get_active(
+    async def get_active_positions(
         self,
         db: AsyncSession,
         *,
@@ -52,17 +50,6 @@ class CRUDPosition(CRUDBase[Position]):
             .limit(limit)
         )
         return list(result.scalars().all())
-    
-    # 别名，保持与原版兼容
-    async def get_active_positions(
-        self,
-        db: AsyncSession,
-        *,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Position]:
-        """get_active 的别名"""
-        return await self.get_active(db, skip=skip, limit=limit)
     
     async def count_active(self, db: AsyncSession) -> int:
         """获取启用岗位数量"""
@@ -80,7 +67,7 @@ class CRUDPosition(CRUDBase[Position]):
         obj_in: PositionCreate
     ) -> Position:
         """创建岗位"""
-        return await self.create(db, obj_in=obj_in)
+        return await self.create(db, obj_in=obj_in.model_dump())
     
     async def update_position(
         self,
@@ -90,7 +77,8 @@ class CRUDPosition(CRUDBase[Position]):
         obj_in: PositionUpdate
     ) -> Position:
         """更新岗位"""
-        return await self.update(db, db_obj=db_obj, obj_in=obj_in)
+        update_data = obj_in.model_dump(exclude_unset=True)
+        return await self.update(db, db_obj=db_obj, obj_in=update_data)
 
 
 position_crud = CRUDPosition(Position)

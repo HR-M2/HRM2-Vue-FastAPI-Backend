@@ -16,7 +16,7 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException
 from app.crud import video_crud, application_crud
-from app.schemas.video import (
+from app.models import (
     VideoAnalysisCreate,
     VideoAnalysisResponse,
     VideoResultUpdate,

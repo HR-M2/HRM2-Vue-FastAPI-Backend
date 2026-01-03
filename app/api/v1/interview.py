@@ -16,7 +16,7 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException, BadRequestException
 from app.crud import interview_crud, application_crud
-from app.schemas.interview import (
+from app.models import (
     InterviewSessionCreate,
     InterviewSessionResponse,
     InterviewSessionUpdate,

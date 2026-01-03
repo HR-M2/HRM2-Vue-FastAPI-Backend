@@ -1,91 +1,91 @@
 """
-岗位模型模块
-"""
-from typing import TYPE_CHECKING, List, Optional
-from sqlalchemy import String, Text, Integer, Boolean, JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+岗位模型模块 - SQLModel 版本
 
-from .base import BaseModel
+合并了 Model 和 Schema，减少代码重复
+"""
+from typing import Optional, List, TYPE_CHECKING
+from sqlmodel import SQLModel, Field, Relationship, Column, JSON
+
+from .base import SQLModelBase, TimestampMixin, IDMixin, TimestampResponse
 
 if TYPE_CHECKING:
     from .application import Application
 
 
-class Position(BaseModel):
-    """
-    岗位模型
-    
-    存储招聘岗位信息和筛选标准
-    """
+# ==================== 基础字段定义 ====================
+
+class PositionBase(SQLModelBase):
+    """岗位基础字段 - 用于创建和继承"""
+    title: str = Field(..., min_length=1, max_length=100, description="岗位名称", index=True)
+    department: Optional[str] = Field(None, max_length=100, description="所属部门")
+    description: Optional[str] = Field(None, description="岗位描述/JD")
+    required_skills: List[str] = Field(default_factory=list, sa_column=Column(JSON), description="必备技能")
+    optional_skills: List[str] = Field(default_factory=list, sa_column=Column(JSON), description="可选技能")
+    min_experience: int = Field(0, ge=0, description="最低工作年限")
+    education: List[str] = Field(default_factory=list, sa_column=Column(JSON), description="学历要求")
+    salary_min: int = Field(0, ge=0, description="最低薪资(K)")
+    salary_max: int = Field(0, ge=0, description="最高薪资(K)")
+
+
+# ==================== 表模型 ====================
+
+class Position(PositionBase, TimestampMixin, IDMixin, table=True):
+    """岗位表模型"""
     __tablename__ = "positions"
     
-    # ========== 基本信息 ==========
-    title: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-        index=True,
-        comment="岗位名称"
-    )
-    department: Mapped[Optional[str]] = mapped_column(
-        String(100),
-        nullable=True,
-        comment="所属部门"
-    )
-    description: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="岗位描述/JD"
-    )
+    is_active: bool = Field(default=True, index=True, description="是否启用")
     
-    # ========== 任职要求 ==========
-    required_skills: Mapped[Optional[list]] = mapped_column(
-        JSON,
-        default=list,
-        comment="必备技能列表"
-    )
-    optional_skills: Mapped[Optional[list]] = mapped_column(
-        JSON,
-        default=list,
-        comment="可选技能列表"
-    )
-    min_experience: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        comment="最低工作年限"
-    )
-    education: Mapped[Optional[list]] = mapped_column(
-        JSON,
-        default=list,
-        comment="学历要求"
-    )
-    
-    # ========== 薪资范围 ==========
-    salary_min: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        comment="最低薪资(K)"
-    )
-    salary_max: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        comment="最高薪资(K)"
-    )
-    
-    # ========== 状态 ==========
-    is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        index=True,
-        comment="是否启用"
-    )
-    
-    # ========== 关联关系 ==========
-    applications: Mapped[List["Application"]] = relationship(
-        "Application",
+    # 关联关系
+    applications: List["Application"] = Relationship(
         back_populates="position",
-        lazy="selectin",
-        passive_deletes="all"  # 完全禁用ORM设置外键为NULL，让数据库CASCADE生效
+        sa_relationship_kwargs={"lazy": "selectin", "passive_deletes": "all"}
     )
     
     def __repr__(self) -> str:
         return f"<Position(id={self.id}, title={self.title})>"
+
+
+# ==================== 请求 Schema ====================
+
+class PositionCreate(PositionBase):
+    """创建岗位请求"""
+    pass
+
+
+class PositionUpdate(SQLModelBase):
+    """更新岗位请求 - 所有字段可选"""
+    title: Optional[str] = Field(None, min_length=1, max_length=100)
+    department: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = None
+    required_skills: Optional[List[str]] = None
+    optional_skills: Optional[List[str]] = None
+    min_experience: Optional[int] = Field(None, ge=0)
+    education: Optional[List[str]] = None
+    salary_min: Optional[int] = Field(None, ge=0)
+    salary_max: Optional[int] = Field(None, ge=0)
+    is_active: Optional[bool] = None
+
+
+# ==================== 响应 Schema ====================
+
+class PositionResponse(TimestampResponse):
+    """岗位详情响应"""
+    title: str
+    department: Optional[str]
+    description: Optional[str]
+    required_skills: List[str]
+    optional_skills: List[str]
+    min_experience: int
+    education: List[str]
+    salary_min: int
+    salary_max: int
+    is_active: bool
+    application_count: int = Field(0, description="申请数量")
+
+
+class PositionListResponse(TimestampResponse):
+    """岗位列表项响应（简化版）"""
+    title: str
+    department: Optional[str]
+    is_active: bool
+    application_count: int = 0

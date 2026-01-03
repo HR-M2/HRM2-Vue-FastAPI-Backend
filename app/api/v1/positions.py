@@ -15,7 +15,7 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException, ConflictException
 from app.crud import position_crud
-from app.schemas.position import (
+from app.models import (
     PositionCreate,
     PositionUpdate,
     PositionResponse,

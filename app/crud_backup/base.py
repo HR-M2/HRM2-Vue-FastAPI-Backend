@@ -1,23 +1,22 @@
 """
-CRUD 基类模块 - SQLModel 简化版
+CRUD 基类模块
 
-直接使用 SQLModel 对象，无需 model_dump() 转换
+提供通用的增删改查操作
 """
-from typing import Generic, TypeVar, Type, Optional, List, Any, Dict
+from typing import Generic, TypeVar, Type, Optional, List, Any
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import SQLModel
 
-ModelType = TypeVar("ModelType", bound=SQLModel)
-CreateSchemaType = TypeVar("CreateSchemaType", bound=SQLModel)
-UpdateSchemaType = TypeVar("UpdateSchemaType", bound=SQLModel)
+from app.models.base import BaseModel
+
+ModelType = TypeVar("ModelType", bound=BaseModel)
 
 
 class CRUDBase(Generic[ModelType]):
     """
-    CRUD 基类 - 简化版
+    CRUD 基类
     
-    直接操作 SQLModel 对象，减少样板代码
+    提供基本的增删改查方法
     """
     
     def __init__(self, model: Type[ModelType]):
@@ -55,23 +54,9 @@ class CRUDBase(Generic[ModelType]):
         )
         return result.scalar() or 0
     
-    async def create(
-        self,
-        db: AsyncSession,
-        *,
-        obj_in: CreateSchemaType
-    ) -> ModelType:
-        """
-        创建记录
-        
-        SQLModel 可以直接从 Schema 创建 Model
-        """
-        # 如果传入的是 dict，直接使用；否则转换
-        if isinstance(obj_in, dict):
-            db_obj = self.model(**obj_in)
-        else:
-            db_obj = self.model.model_validate(obj_in)
-        
+    async def create(self, db: AsyncSession, *, obj_in: dict) -> ModelType:
+        """创建记录"""
+        db_obj = self.model(**obj_in)
         db.add(db_obj)
         await db.flush()
         await db.refresh(db_obj)
@@ -82,22 +67,12 @@ class CRUDBase(Generic[ModelType]):
         db: AsyncSession,
         *,
         db_obj: ModelType,
-        obj_in: UpdateSchemaType | Dict[str, Any]
+        obj_in: dict
     ) -> ModelType:
-        """
-        更新记录
-        
-        支持传入 Schema 或 dict
-        """
-        if isinstance(obj_in, dict):
-            update_data = obj_in
-        else:
-            update_data = obj_in.model_dump(exclude_unset=True)
-        
-        for field, value in update_data.items():
+        """更新记录"""
+        for field, value in obj_in.items():
             if value is not None:
                 setattr(db_obj, field, value)
-        
         await db.flush()
         await db.refresh(db_obj)
         return db_obj
