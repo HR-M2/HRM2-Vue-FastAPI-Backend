@@ -278,7 +278,7 @@ async def start_ai_screening(
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 获取应聘申请详情
-    application = await application_crud.get_detail(db, data.application_id)
+    application = await application_crud.get_with_relations(db, data.application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {data.application_id}")
     
@@ -318,7 +318,7 @@ async def start_ai_screening(
     # 创建筛选任务
     from app.models import ScreeningTaskCreate
     task_data = ScreeningTaskCreate(application_id=data.application_id)
-    task = await screening_crud.create_task(db, obj_in=task_data)
+    task = await screening_crud.create(db, obj_in=task_data)
     
     # 更新状态为处理中（使用 running 与前端保持一致）
     # 注：进度通过 progress_cache 内存缓存管理，不存储到数据库
@@ -399,7 +399,7 @@ async def ai_generate_initial_questions(
     from app.models import InterviewSessionUpdate
     questions_text = [q["question"] for q in result.get("questions", [])]
     update_data = InterviewSessionUpdate(question_pool=questions_text)
-    await interview_crud.update_session(db, db_obj=session, obj_in=update_data)
+    await interview_crud.update(db, db_obj=session, obj_in=update_data)
     
     return success_response(data=result)
 
@@ -559,7 +559,7 @@ async def ai_generate_report(
         report=report,
         report_markdown=_format_report_markdown(report, candidate_name)
     )
-    await interview_crud.update_session(db, db_obj=session, obj_in=update_data)
+    await interview_crud.update(db, db_obj=session, obj_in=update_data)
     
     return success_response(data=report, message="面试报告生成成功")
 
@@ -609,7 +609,7 @@ async def ai_comprehensive_analysis(
         raise BadRequestException("LLM服务未配置，请检查API Key")
     
     # 获取应聘申请详情
-    application = await application_crud.get_detail(db, data.application_id)
+    application = await application_crud.get_with_relations(db, data.application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {data.application_id}")
     
@@ -713,7 +713,7 @@ async def generate_random_resume(
             file_size=len(resume_data['content'].encode('utf-8')),
             notes=f"AI随机生成 - 目标岗位: {position.title}"
         )
-        saved_resume = await resume_crud.create_resume(db, obj_in=resume_create)
+        saved_resume = await resume_crud.create(db, obj_in=resume_create)
         saved_resumes.append({
             'id': saved_resume.id,
             'candidate_name': saved_resume.candidate_name,

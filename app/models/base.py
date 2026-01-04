@@ -4,7 +4,7 @@ SQLModel 基类模块
 定义通用字段和混入类
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import SQLModel, Field
 
@@ -25,12 +25,12 @@ class SQLModelBase(SQLModel):
 class TimestampMixin(SQLModel):
     """时间戳混入类 - 用于表模型"""
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         nullable=False,
         description="创建时间"
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         nullable=False,
         description="更新时间"
     )
