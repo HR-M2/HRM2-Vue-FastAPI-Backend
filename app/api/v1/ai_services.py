@@ -676,7 +676,7 @@ async def generate_random_resume(
         raise NotFoundException(f"岗位不存在: {data.position_id}")
     
     position_data = {
-        "position": position.title,
+        "title": position.title,
         "description": position.description or "",
         "required_skills": position.required_skills or [],
         "optional_skills": position.optional_skills or [],

@@ -12,7 +12,7 @@ from .llm_client import get_llm_client, get_embedding_config
 
 POSITION_SCHEMA = """
 {
-    "position": "岗位名称（字符串）",
+    "title": "岗位名称（字符串）",
     "description": "岗位描述（字符串）",
     "required_skills": ["必备技能列表"],
     "optional_skills": ["可选技能列表"],
@@ -86,8 +86,8 @@ class PositionService:
 
     def _normalize_position_data(self, data: Dict[str, Any]) -> None:
         """校验并修正生成的数据结构。"""
-        if "position" not in data:
-            raise ValueError("生成的数据缺少必要字段: position")
+        if "title" not in data:
+            raise ValueError("生成的数据缺少必要字段: title")
 
         array_fields = ["required_skills", "optional_skills", "education", "certifications"]
         for field in array_fields:
