@@ -30,11 +30,10 @@ Application (应聘申请)
 
 | 层级 | 技术 |
 | ---- | ---- |
-| 框架 | FastAPI 0.115+ |
-| ORM | SQLAlchemy 2.0 (异步) |
+| 框架 | FastAPI 0.119+ |
+| ORM + Schema | SQLModel 0.0.27+（统一 SQLAlchemy 2.0 异步 + Pydantic） |
 | 数据库 | SQLite (开发) / PostgreSQL (生产) |
-| 验证 | Pydantic 2.0 |
-| AI 服务 | AutoGen + OpenAI SDK |
+| AI 服务 | PyAutoGen 0.10+ / OpenAI SDK 2.5+ |
 
 ## 📁 项目结构
 
@@ -54,22 +53,29 @@ HRM2-Vue-FastAPI-Backend/
 │   │   ├── config.py           # 配置管理
 │   │   ├── database.py         # 数据库配置
 │   │   ├── response.py         # 统一响应
-│   │   └── exceptions.py       # 异常处理
-│   ├── models/              # SQLAlchemy 模型
-│   ├── schemas/             # Pydantic Schema
+│   │   ├── exceptions.py       # 异常处理
+│   │   └── progress_cache.py   # 任务进度缓存
+│   ├── models/              # SQLModel 模型（Table + Schema 统一）
 │   ├── crud/                # CRUD 操作
 │   ├── services/            # 业务服务层
 │   │   └── agents/             # AI Agent 服务
+│   │       ├── base.py            # Agent 基类
 │   │       ├── llm_client.py      # LLM 客户端
-│   │       ├── screening_agents.py # 简历筛选 Agent
-│   │       ├── interview_assist_agent.py # 面试辅助 Agent
-│   │       └── evaluation_agents.py # 评估 Agent
+│   │       ├── screening.py       # 简历筛选 Agent
+│   │       ├── interview.py       # 面试辅助 Agent
+│   │       ├── analysis.py        # 综合分析 Agent
+│   │       ├── position.py        # 岗位分析 Agent
+│   │       └── dev_tools.py       # 开发工具服务
 │   └── main.py              # 应用入口
+├── Docs/                    # 开发文档
 ├── data/                    # SQLite 数据库文件
+├── tests/                   # 测试用例
 ├── .env.example             # 环境变量模板
 ├── requirements.txt         # Python 依赖
 └── run.py                   # 启动脚本
 ```
+
+> 💡 **注意**: 本项目使用 **SQLModel** 统一了 ORM Model 和 Pydantic Schema，不再有独立的 `schemas/` 目录。详见 [后端开发规范](./Docs/后端开发规范.md)。
 
 ## 🚀 快速开始
 
@@ -128,7 +134,7 @@ uvicorn app.main:app --reload
 | 综合分析 | `/api/v1/analysis` | 候选人综合评估 |
 | AI 服务 | `/api/v1/ai` | AI 能力调用接口 |
 
-## � 环境变量
+## 🔧 环境变量
 
 参考 `.env.example` 文件：
 
@@ -142,7 +148,7 @@ DEBUG=true
 DATABASE_URL=sqlite+aiosqlite:///./data/hrm2.db
 
 # CORS
-CORS_ORIGINS=["http://localhost:5173"]
+CORS_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]
 
 # LLM 配置 (必填)
 LLM_MODEL=deepseek-ai/DeepSeek-V3
@@ -152,6 +158,11 @@ LLM_TEMPERATURE=0.7
 LLM_TIMEOUT=120
 LLM_MAX_CONCURRENCY=2
 LLM_RATE_LIMIT=60
+
+# Embedding 配置 (可选)
+EMBEDDING_MODEL=
+EMBEDDING_API_KEY=
+EMBEDDING_BASE_URL=
 ```
 
 ## 📝 统一响应格式
@@ -166,6 +177,10 @@ LLM_RATE_LIMIT=60
     "data": { ... }
 }
 ```
+
+## 📚 开发文档
+
+- [后端开发规范](./Docs/后端开发规范.md) - 代码风格、架构规范、SQLModel 使用指南
 
 ## 📄 License
 
