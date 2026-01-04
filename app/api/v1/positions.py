@@ -15,7 +15,7 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException, ConflictException
 from app.crud import position_crud
-from app.schemas.position import (
+from app.models import (
     PositionCreate,
     PositionUpdate,
     PositionResponse,
@@ -38,7 +38,7 @@ async def get_positions(
     skip = (page - 1) * page_size
     
     if is_active is True:
-        positions = await position_crud.get_active_positions(
+        positions = await position_crud.get_active(
             db, skip=skip, limit=page_size
         )
         total = await position_crud.count_active(db)
@@ -70,7 +70,7 @@ async def create_position(
     if existing:
         raise ConflictException(f"岗位 '{data.title}' 已存在")
     
-    position = await position_crud.create_position(db, obj_in=data)
+    position = await position_crud.create(db, obj_in=data)
     return success_response(
         data=PositionResponse.model_validate(position).model_dump(),
         message="岗位创建成功"
@@ -85,7 +85,7 @@ async def get_position(
     """
     根据 ID 获取岗位详情
     """
-    position = await position_crud.get_with_count(db, position_id)
+    position = await position_crud.get_with_applications(db, position_id)
     if not position:
         raise NotFoundException(f"岗位不存在: {position_id}")
     
@@ -114,7 +114,7 @@ async def update_position(
         if existing:
             raise ConflictException(f"岗位 '{data.title}' 已存在")
     
-    position = await position_crud.update_position(db, db_obj=position, obj_in=data)
+    position = await position_crud.update(db, db_obj=position, obj_in=data)
     return success_response(
         data=PositionResponse.model_validate(position).model_dump(),
         message="岗位更新成功"

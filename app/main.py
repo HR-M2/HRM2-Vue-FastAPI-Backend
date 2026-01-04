@@ -12,7 +12,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.database import init_db, close_db
-from app.core.response import success_response
+from app.core.response import success_response, DictResponse
 from app.core.exceptions import (
     AppException,
     app_exception_handler,
@@ -79,13 +79,13 @@ def create_app() -> FastAPI:
     app.include_router(api_router, prefix="/api/v1")
     
     # 健康检查
-    @app.get("/health", tags=["系统"])
+    @app.get("/health", tags=["系统"], response_model=DictResponse)
     async def health_check():
         """健康检查接口"""
         return success_response(data={"status": "healthy"})
     
     # 根路径
-    @app.get("/", tags=["系统"])
+    @app.get("/", tags=["系统"], response_model=DictResponse)
     async def root():
         """API 根路径"""
         return success_response(data={

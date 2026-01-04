@@ -10,7 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import analysis_crud
-from app.schemas.analysis import ComprehensiveAnalysisCreate
+from app.models import ComprehensiveAnalysisCreate
 from tests.conftest import DataFactory
 
 
@@ -33,7 +33,7 @@ async def test_analysis_crud_flow(client: AsyncClient, db_session: AsyncSession,
         "report": "测试报告内容",
         "input_snapshot": {"position": "测试岗位", "candidate": "测试候选人"}
     }
-    analysis = await analysis_crud.create_analysis(
+    analysis = await analysis_crud.create_with_result(
         db_session, obj_in=create_schema, analysis_result=analysis_result
     )
     await db_session.commit()

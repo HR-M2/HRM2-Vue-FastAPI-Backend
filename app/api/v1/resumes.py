@@ -17,7 +17,7 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException, ConflictException
 from app.crud import resume_crud
-from app.schemas.resume import (
+from app.models import (
     ResumeCreate,
     ResumeUpdate,
     ResumeResponse,
@@ -57,7 +57,7 @@ async def get_resumes(
     skip = (page - 1) * page_size
     
     if keyword:
-        resumes = await resume_crud.get_by_candidate_name(
+        resumes = await resume_crud.search_by_name(
             db, keyword, skip=skip, limit=page_size
         )
         total = len(resumes)  # 简化处理
@@ -87,7 +87,7 @@ async def create_resume(
     if existing:
         raise ConflictException("简历已存在（文件重复）")
     
-    resume = await resume_crud.create_resume(db, obj_in=data)
+    resume = await resume_crud.create(db, obj_in=data)
     return success_response(
         data=ResumeResponse.model_validate(resume).model_dump(),
         message="简历创建成功"
@@ -137,7 +137,7 @@ async def update_resume(
     if not resume:
         raise NotFoundException(f"简历不存在: {resume_id}")
     
-    resume = await resume_crud.update_resume(db, db_obj=resume, obj_in=data)
+    resume = await resume_crud.update(db, db_obj=resume, obj_in=data)
     return success_response(
         data=ResumeResponse.model_validate(resume).model_dump(),
         message="简历更新成功"

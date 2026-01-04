@@ -12,8 +12,9 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
-from app.core.database import Base, get_db
+from app.core.database import get_db
 from app.main import create_app
+from sqlmodel import SQLModel
 
 
 # ========== 测试数据工厂 ==========
@@ -183,9 +184,15 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     
     每个测试前创建表，测试后删除表，确保测试隔离
     """
+    # 导入所有模型以确保它们被注册
+    from app.models import (
+        Position, Resume, Application,
+        ScreeningTask, VideoAnalysis, InterviewSession, ComprehensiveAnalysis
+    )
+    
     # 创建所有表
     async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(SQLModel.metadata.create_all)
     
     # 提供会话
     async with TestSessionLocal() as session:
@@ -193,7 +200,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     
     # 删除所有表
     async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(SQLModel.metadata.drop_all)
 
 
 @pytest_asyncio.fixture(scope="function")

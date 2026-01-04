@@ -1,44 +1,75 @@
 """
-数据库模型模块
+SQLModel 模型模块
 
-模型关系:
-    Position (岗位)
-        |
-        | 1:N
-        v
-    Application (应聘申请) <-- 核心表
-        |
-        | N:1
-        |
-    Resume (简历)
-
-    Application (应聘申请)
-        |
-        +-- 1:N --> ScreeningTask (筛选任务)
-        |
-        +-- 1:N --> VideoAnalysis (视频分析)
-        |
-        +-- 1:N --> InterviewSession (面试会话)
-        |
-        +-- 1:N --> ComprehensiveAnalysis (综合分析)
+使用 SQLModel 统一 ORM Model 和 Pydantic Schema
 """
-from .base import BaseModel, TimestampMixin
-from .position import Position
-from .resume import Resume
-from .application import Application
-from .screening import ScreeningTask
-from .video import VideoAnalysis
-from .interview import InterviewSession
-from .analysis import ComprehensiveAnalysis
+from .base import SQLModelBase, TimestampMixin
+from .position import Position, PositionCreate, PositionUpdate, PositionResponse, PositionListResponse
+from .resume import Resume, ResumeCreate, ResumeUpdate, ResumeResponse, ResumeListResponse
+from .application import (
+    Application, ApplicationCreate, ApplicationUpdate, 
+    ApplicationResponse, ApplicationListResponse, ApplicationDetailResponse,
+    ScreeningTaskBrief, VideoAnalysisBrief, InterviewSessionBrief, ComprehensiveAnalysisBrief
+)
+from .screening import ScreeningTask, ScreeningTaskCreate, ScreeningResultUpdate, ScreeningTaskResponse, TaskStatus, ScreeningScore
+from .video import VideoAnalysis, VideoAnalysisCreate, VideoResultUpdate, VideoAnalysisResponse, BigFiveScores
+from .interview import InterviewSession, InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, QAMessage, QAMessageCreate, MessagesSyncRequest, GenerateQuestionsRequest
+from .analysis import ComprehensiveAnalysis, ComprehensiveAnalysisCreate, ComprehensiveAnalysisUpdate, ComprehensiveAnalysisResponse, RecommendationLevel, DimensionScoreItem
 
 __all__ = [
-    "BaseModel",
+    # Base
+    "SQLModelBase",
     "TimestampMixin",
+    # Position
     "Position",
+    "PositionCreate",
+    "PositionUpdate", 
+    "PositionResponse",
+    "PositionListResponse",
+    # Resume
     "Resume",
+    "ResumeCreate",
+    "ResumeUpdate",
+    "ResumeResponse",
+    "ResumeListResponse",
+    # Application
     "Application",
+    "ApplicationCreate",
+    "ApplicationUpdate",
+    "ApplicationResponse",
+    "ApplicationListResponse",
+    "ApplicationDetailResponse",
+    "ScreeningTaskBrief",
+    "VideoAnalysisBrief",
+    "InterviewSessionBrief",
+    "ComprehensiveAnalysisBrief",
+    # Screening
     "ScreeningTask",
+    "ScreeningTaskCreate",
+    "ScreeningResultUpdate",
+    "ScreeningTaskResponse",
+    "ScreeningScore",
+    "TaskStatus",
+    # Video
     "VideoAnalysis",
+    "VideoAnalysisCreate",
+    "VideoResultUpdate",
+    "VideoAnalysisResponse",
+    "BigFiveScores",
+    # Interview
     "InterviewSession",
+    "InterviewSessionCreate",
+    "InterviewSessionUpdate",
+    "InterviewSessionResponse",
+    "QAMessage",
+    "QAMessageCreate",
+    "MessagesSyncRequest",
+    "GenerateQuestionsRequest",
+    # Analysis
     "ComprehensiveAnalysis",
+    "ComprehensiveAnalysisCreate",
+    "ComprehensiveAnalysisUpdate",
+    "ComprehensiveAnalysisResponse",
+    "RecommendationLevel",
+    "DimensionScoreItem",
 ]

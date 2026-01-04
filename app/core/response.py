@@ -3,7 +3,7 @@
 
 定义标准 API 响应格式
 """
-from typing import Any, Generic, Optional, TypeVar, Dict
+from typing import Any, Generic, Optional, TypeVar, Dict, List
 from pydantic import BaseModel, Field
 
 T = TypeVar("T")
@@ -29,7 +29,7 @@ class ResponseModel(BaseModel, Generic[T]):
 
 class PagedData(BaseModel, Generic[T]):
     """分页数据模型"""
-    items: list[T]
+    items: List[T]
     total: int
     page: int
     page_size: int

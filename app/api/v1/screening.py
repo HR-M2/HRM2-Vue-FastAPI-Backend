@@ -18,8 +18,8 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException
 from app.crud import screening_crud, application_crud
-from app.models.screening import TaskStatus
-from app.schemas.screening import (
+from app.models import (
+    TaskStatus,
     ScreeningTaskCreate,
     ScreeningTaskResponse,
     ScreeningResultUpdate,
@@ -79,11 +79,11 @@ async def create_screening_task(
     为指定应聘申请创建筛选任务
     """
     # 验证应聘申请存在
-    application = await application_crud.get_detail(db, data.application_id)
+    application = await application_crud.get_with_relations(db, data.application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {data.application_id}")
     
-    task = await screening_crud.create_task(db, obj_in=data)
+    task = await screening_crud.create(db, obj_in=data)
     
     response = ScreeningTaskResponse.model_validate(task)
     if application.resume:
@@ -166,7 +166,7 @@ async def update_screening_result(
     if not task:
         raise NotFoundException(f"筛选任务不存在: {task_id}")
     
-    task = await screening_crud.update_result(db, db_obj=task, obj_in=data)
+    task = await screening_crud.update(db, db_obj=task, obj_in=data)
     
     return success_response(
         data=ScreeningTaskResponse.model_validate(task).model_dump(),

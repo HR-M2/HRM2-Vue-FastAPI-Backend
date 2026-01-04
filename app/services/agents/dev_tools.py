@@ -75,7 +75,7 @@ class DevToolsService:
 
         user_prompt = USER_PROMPT_TEMPLATE.format(
             candidate_name=candidate_name,
-            position=position_data.get("position", "未知岗位"),
+            position=position_data.get("title", "未知岗位"),
             description=position_data.get("description", ""),
             required_skills=", ".join(position_data.get("required_skills", [])),
             optional_skills=", ".join(position_data.get("optional_skills", [])),

@@ -6,6 +6,7 @@ pydantic-settings>=2.7.0
 
 # 数据库
 sqlalchemy>=2.0.36
+sqlmodel>=0.0.22
 alembic>=1.14.0
 aiosqlite>=0.20.0
 

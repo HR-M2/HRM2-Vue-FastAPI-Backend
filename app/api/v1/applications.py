@@ -16,7 +16,7 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException, ConflictException
 from app.crud import application_crud, position_crud, resume_crud, screening_crud, interview_crud, analysis_crud
-from app.schemas.application import (
+from app.models import (
     ApplicationCreate,
     ApplicationUpdate,
     ApplicationResponse,
@@ -53,12 +53,12 @@ async def get_applications(
         )
         total = len(applications)
     else:
-        applications = await application_crud.get_multi(
+        applications = await application_crud.get_list_with_relations(
             db, skip=skip, limit=page_size
         )
         total = await application_crud.count(db)
     
-    from app.schemas.application import (
+    from app.models import (
         ScreeningTaskBrief, InterviewSessionBrief, 
         VideoAnalysisBrief, ComprehensiveAnalysisBrief
     )
@@ -113,7 +113,7 @@ async def create_application(
         application = await application_crud.restore(db, db_obj=deleted_app)
         message = "应聘申请已恢复"
     else:
-        application = await application_crud.create_application(db, obj_in=data)
+        application = await application_crud.create(db, obj_in=data)
         message = "应聘申请创建成功"
     
     response = ApplicationResponse.model_validate(application)
@@ -157,7 +157,7 @@ async def get_application(
     """
     获取应聘申请详情（含所有关联数据）
     """
-    application = await application_crud.get_detail(db, application_id)
+    application = await application_crud.get_with_relations(db, application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {application_id}")
     
@@ -186,7 +186,7 @@ async def update_application(
     if not application:
         raise NotFoundException(f"应聘申请不存在: {application_id}")
     
-    application = await application_crud.update_application(
+    application = await application_crud.update(
         db, db_obj=application, obj_in=data
     )
     

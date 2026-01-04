@@ -16,7 +16,7 @@ from app.core.response import (
 )
 from app.core.exceptions import NotFoundException
 from app.crud import video_crud, application_crud
-from app.schemas.video import (
+from app.models import (
     VideoAnalysisCreate,
     VideoAnalysisResponse,
     VideoResultUpdate,
@@ -69,11 +69,11 @@ async def create_video_analysis(
     创建视频分析任务
     """
     # 验证应聘申请存在
-    application = await application_crud.get_detail(db, data.application_id)
+    application = await application_crud.get_with_relations(db, data.application_id)
     if not application:
         raise NotFoundException(f"应聘申请不存在: {data.application_id}")
     
-    video = await video_crud.create_video(db, obj_in=data)
+    video = await video_crud.create(db, obj_in=data)
     
     response = VideoAnalysisResponse.model_validate(video)
     if application.resume:
@@ -149,7 +149,7 @@ async def update_video_result(
     if not video:
         raise NotFoundException(f"视频分析不存在: {video_id}")
     
-    video = await video_crud.update_result(db, db_obj=video, obj_in=data)
+    video = await video_crud.update(db, db_obj=video, obj_in=data)
     
     return success_response(
         data=VideoAnalysisResponse.model_validate(video).model_dump(),

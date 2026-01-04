@@ -1,88 +1,86 @@
 """
-简历模型模块
+简历模型模块 - SQLModel 版本
 """
-from typing import TYPE_CHECKING, List, Optional
-from sqlalchemy import String, Text, Integer, Boolean
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional, List, TYPE_CHECKING
+from sqlmodel import SQLModel, Field, Relationship
 
-from .base import BaseModel
+from .base import SQLModelBase, TimestampMixin, IDMixin, TimestampResponse
 
 if TYPE_CHECKING:
     from .application import Application
 
 
-class Resume(BaseModel):
-    """
-    简历模型
-    
-    存储候选人简历信息，一份简历可以投递多个岗位（多个 Application）
-    """
+# ==================== 基础字段定义 ====================
+
+class ResumeBase(SQLModelBase):
+    """简历基础字段"""
+    candidate_name: str = Field(..., min_length=1, max_length=50, description="候选人姓名", index=True)
+    phone: Optional[str] = Field(None, max_length=20, description="联系电话")
+    email: Optional[str] = Field(None, max_length=100, description="电子邮箱")
+    content: str = Field(..., min_length=1, description="简历内容")
+    filename: Optional[str] = Field(None, max_length=255, description="原始文件名")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+# ==================== 表模型 ====================
+
+class Resume(ResumeBase, TimestampMixin, IDMixin, table=True):
+    """简历表模型"""
     __tablename__ = "resumes"
     
-    # ========== 候选人信息 ==========
-    candidate_name: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        index=True,
-        comment="候选人姓名"
-    )
-    phone: Mapped[Optional[str]] = mapped_column(
-        String(20),
-        nullable=True,
-        comment="联系电话"
-    )
-    email: Mapped[Optional[str]] = mapped_column(
-        String(100),
-        nullable=True,
-        comment="电子邮箱"
-    )
+    file_hash: str = Field(..., max_length=64, unique=True, index=True, description="文件哈希(去重用)")
+    file_size: int = Field(0, ge=0, description="文件大小(字节)")
+    is_parsed: bool = Field(False, description="是否已解析")
     
-    # ========== 简历内容 ==========
-    content: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-        comment="简历内容(文本)"
-    )
-    
-    # ========== 文件信息 ==========
-    filename: Mapped[Optional[str]] = mapped_column(
-        String(255),
-        nullable=True,
-        comment="原始文件名"
-    )
-    file_hash: Mapped[str] = mapped_column(
-        String(64),
-        nullable=False,
-        unique=True,
-        index=True,
-        comment="文件哈希(去重用)"
-    )
-    file_size: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        comment="文件大小(字节)"
-    )
-    
-    # ========== 状态 ==========
-    is_parsed: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        comment="是否已解析"
-    )
-    
-    # ========== 备注 ==========
-    notes: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="备注"
-    )
-    
-    # ========== 关联关系 ==========
-    applications: Mapped[List["Application"]] = relationship(
-        "Application",
+    # 关联关系
+    applications: List["Application"] = Relationship(
         back_populates="resume",
-        lazy="selectin"
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
     
     def __repr__(self) -> str:
         return f"<Resume(id={self.id}, candidate={self.candidate_name})>"
+
+
+# ==================== 请求 Schema ====================
+
+class ResumeCreate(ResumeBase):
+    """创建简历请求"""
+    file_hash: str = Field(..., max_length=64, description="文件哈希")
+    file_size: int = Field(0, ge=0, description="文件大小")
+
+
+class ResumeUpdate(SQLModelBase):
+    """更新简历请求"""
+    candidate_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=100)
+    content: Optional[str] = None
+    notes: Optional[str] = None
+    is_parsed: Optional[bool] = None
+
+
+# ==================== 响应 Schema ====================
+
+class ResumeResponse(TimestampResponse):
+    """简历详情响应"""
+    candidate_name: str
+    phone: Optional[str]
+    email: Optional[str]
+    content: str
+    filename: Optional[str]
+    file_hash: str
+    file_size: int
+    is_parsed: bool
+    notes: Optional[str]
+    application_count: int = Field(0, description="申请数量")
+
+
+class ResumeListResponse(TimestampResponse):
+    """简历列表项响应（简化版）"""
+    candidate_name: str
+    phone: Optional[str]
+    email: Optional[str]
+    filename: Optional[str]
+    is_parsed: bool
+    application_count: int = 0
