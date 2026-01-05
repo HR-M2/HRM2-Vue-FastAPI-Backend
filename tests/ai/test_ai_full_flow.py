@@ -174,7 +174,7 @@ class TestAIFullFlow:
         )
 
         # 验证必要字段
-        assert "position" in result, "生成结果缺少 position 字段"
+        assert "title" in result, "生成结果缺少 title 字段"
         assert "required_skills" in result, "生成结果缺少 required_skills 字段"
         assert isinstance(result["required_skills"], list), "required_skills 应为列表"
         assert len(result["required_skills"]) > 0, "required_skills 不应为空"
@@ -189,7 +189,7 @@ class TestAIFullFlow:
         TestAIFullFlow.generated_position = result
 
         logger.info("生成的岗位要求：")
-        logger.info(f"  - 岗位名称: {result.get('position')}")
+        logger.info(f"  - 岗位名称: {result.get('title')}")
         logger.info(f"  - 必备技能: {result.get('required_skills')}")
         logger.info(f"  - 可选技能: {result.get('optional_skills')}")
         logger.info(f"  - 最低经验: {result.get('min_experience')}年")
@@ -207,7 +207,7 @@ class TestAIFullFlow:
 
         # 使用生成的岗位要求或默认配置
         criteria = TestAIFullFlow.generated_position if TestAIFullFlow.generated_position else {
-            "position": "高级Python后端工程师",
+            "title": "高级Python后端工程师",
             "required_skills": ["Python", "FastAPI", "MySQL"],
             "optional_skills": ["Docker", "Kubernetes"],
             "min_experience": 5,
@@ -510,10 +510,10 @@ class TestPositionAIService:
             documents=documents
         )
 
-        assert "position" in result
+        assert "title" in result
         assert "required_skills" in result
 
-        logger.info(f"生成的岗位: {result.get('position')}")
+        logger.info(f"生成的岗位: {result.get('title')}")
         logger.info(f"必备技能: {result.get('required_skills')}")
         logger.info("✓ 带文档的岗位生成测试通过")
 
