@@ -14,11 +14,11 @@ import logging
 import pytest
 from typing import Dict, Any, List
 
-from app.services.agents.position import PositionService, get_position_service
-from app.services.agents.screening import ScreeningAgentManager
-from app.services.agents.interview import InterviewService
-from app.services.agents.analysis import AnalysisService
-from app.services.agents.llm_client import get_llm_client
+from app.agents.position import PositionService, get_position_service
+from app.agents.screening import ScreeningAgentManager
+from app.agents.interview import InterviewService
+from app.agents.analysis import AnalysisService
+from app.agents.llm_client import get_llm_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

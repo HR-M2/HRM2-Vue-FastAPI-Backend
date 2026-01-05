@@ -21,7 +21,7 @@ from app.core.response import success_response, ResponseModel, DictResponse
 from app.core.exceptions import NotFoundException, BadRequestException
 from app.crud import position_crud, application_crud, screening_crud, interview_crud, resume_crud
 from app.models import ResumeCreate
-from app.services.agents import (
+from app.agents import (
     get_position_service,
     get_llm_client,
     ScreeningAgentManager,
