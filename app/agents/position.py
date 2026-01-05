@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 岗位 AI 服务：根据岗位描述生成结构化岗位要求。
 """
@@ -7,47 +8,7 @@ from typing import Dict, Any, List, Optional
 from loguru import logger
 
 from .llm_client import get_llm_client, get_embedding_config
-
-# ================= 提示词模板 =================
-
-POSITION_SCHEMA = """
-{
-    "title": "岗位名称（字符串）",
-    "description": "岗位描述（字符串）",
-    "required_skills": ["必备技能列表"],
-    "optional_skills": ["可选技能列表"],
-    "min_experience": 最低工作经验年数（整数）,
-    "education": ["学历要求，可选值：大专、本科、硕士、博士"],
-    "certifications": ["证书要求列表"],
-    "salary_range": [最低月薪, 最高月薪],
-    "project_requirements": {
-        "min_projects": 最少项目数量（整数）,
-        "team_lead_experience": 是否要求团队管理经验（布尔值）
-    }
-}
-"""
-
-SYSTEM_PROMPT_POSITION = f"""你是一位专业的人力资源专家，擅长根据岗位描述生成结构化的招聘要求。
-
-你需要根据用户提供的岗位描述（可能是简短的一句话，也可能是详细的需求说明），生成完整的岗位要求JSON。
-
-输出格式必须严格遵循以下JSON结构：
-{POSITION_SCHEMA}
-
-注意事项：
-1. 根据岗位类型合理推断所需技能、学历、经验等要求
-2. 技能列表应该具体且与岗位相关
-3. 薪资范围应该符合市场行情（单位：元/月）
-4. 如果信息不足，使用合理的默认值
-5. 只输出JSON，不要有任何其他文字说明
-6. 确保JSON格式正确，可以被解析"""
-
-USER_PROMPT_POSITION = """请根据以下岗位描述生成招聘要求：
-
-{description}
-{context}
-
-请直接输出JSON格式的岗位要求，不要包含任何其他内容。"""
+from .prompts import get_prompt, get_config
 
 
 class PositionService:
@@ -79,8 +40,12 @@ class PositionService:
                     context_parts.append(f"\n--- {name} ---\n{content}")
         context = "\n".join(context_parts)
 
-        user_prompt = USER_PROMPT_POSITION.format(description=description, context=context)
-        position_data = await self._llm.complete_json(SYSTEM_PROMPT_POSITION, user_prompt)
+        # 加载 schema 用于构建系统提示
+        position_schema = get_prompt("position", "position_schema")
+        system_prompt = get_prompt("position", "system_prompt", position_schema=position_schema)
+        user_prompt = get_prompt("position", "user_prompt", description=description, context=context)
+        
+        position_data = await self._llm.complete_json(system_prompt, user_prompt)
         self._normalize_position_data(position_data)
         return position_data
 

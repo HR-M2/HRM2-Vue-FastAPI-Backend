@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 综合分析评估代理（精简版）。
 基于 Rubric 量表对候选人做多维度分析，并生成建议。
@@ -9,119 +10,7 @@ from typing import Dict, Any, List, Optional, Callable
 from loguru import logger
 
 from .llm_client import get_llm_client
-
-# ================= 量表与提示词 =================
-
-RUBRIC_SCALES = {
-    5: {"label": "卓越", "description": "远超岗位要求，表现突出"},
-    4: {"label": "优秀", "description": "超出岗位要求，表现良好"},
-    3: {"label": "良好", "description": "符合岗位要求，表现合格"},
-    2: {"label": "一般", "description": "基本符合，但有提升空间"},
-    1: {"label": "不足", "description": "未达到岗位要求"},
-}
-
-EVALUATION_DIMENSIONS = {
-    "professional_competency": {
-        "name": "专业能力",
-        "weight": 0.30,
-        "sub_dimensions": [
-            "核心技能掌握程度",
-            "专业知识深度",
-            "问题解决能力",
-            "学习成长潜力",
-        ],
-    },
-    "work_experience": {
-        "name": "工作经验",
-        "weight": 0.25,
-        "sub_dimensions": [
-            "经验相关性",
-            "项目复杂度",
-            "成果可量化性",
-            "职责承担程度",
-        ],
-    },
-    "soft_skills": {
-        "name": "软技能",
-        "weight": 0.20,
-        "sub_dimensions": [
-            "沟通表达能力",
-            "团队协作意识",
-            "压力应对能力",
-            "主动性与责任心",
-        ],
-    },
-    "cultural_fit": {
-        "name": "文化匹配",
-        "weight": 0.15,
-        "sub_dimensions": [
-            "职业价值观",
-            "工作态度",
-            "发展意愿",
-            "稳定性预期",
-        ],
-    },
-    "interview_performance": {
-        "name": "面试表现",
-        "weight": 0.10,
-        "sub_dimensions": [
-            "回答逻辑性",
-            "思维深度",
-            "应变能力",
-            "自我认知准确性",
-        ],
-    },
-}
-
-RECOMMENDATION_LEVELS = {
-    "strong_recommend": {
-        "min_score": 85,
-        "label": "强烈推荐",
-        "action": "建议优先录用，尽快安排后续流程",
-    },
-    "recommend": {"min_score": 70, "label": "推荐录用", "action": "符合要求，可以录用"},
-    "cautious": {"min_score": 55, "label": "谨慎考虑", "action": "存在一定风险，建议进一步评估"},
-    "not_recommend": {"min_score": 0, "label": "不推荐", "action": "不建议录用"},
-}
-
-SYSTEM_PROMPT_DIMENSION = """你是一位资深的人力资源评估专家，擅长基于 Rubric 量表进行候选人评估。
-
-你需要评估候选人的【{dimension_name}】维度。
-
-## Rubric 评分标准（1-5分）
-- 5分 卓越：远超岗位要求，表现突出
-- 4分 优秀：超出岗位要求，表现良好
-- 3分 良好：符合岗位要求，表现合格
-- 2分 一般：基本符合，但有提升空间
-- 1分 不足：未达到岗位要求
-
-## 子维度评估项
-{sub_dimensions_block}
-
-## 输出要求
-请输出严格的 JSON 格式：
-{{
-    "dimension_score": <1-5的整数>,
-    "sub_scores": {{
-        "{sd0}": <1-5>,
-        "{sd1}": <1-5>,
-        "{sd2}": <1-5>,
-        "{sd3}": <1-5>
-    }},
-    "strengths": ["优势1", "优势2"],
-    "weaknesses": ["不足1", "不足2"],
-    "analysis": "详细分析说明（100-200字）"
-}}"""
-
-SYSTEM_PROMPT_REPORT = """你是一位资深的招聘决策专家，擅长撰写专业的候选人综合评估报告。
-
-请根据各维度评估结果，生成一份结构清晰、内容专业的综合分析报告。
-
-报告要求：
-1. 语言专业、客观、有建设性
-2. 重点突出关键发现
-3. 给出明确的录用建议
-4. 控制在500字以内"""
+from .prompts import get_prompt, get_config
 
 
 class AnalysisService:
@@ -130,6 +19,10 @@ class AnalysisService:
     def __init__(self, job_config: Dict[str, Any] | None = None):
         self.job_config = job_config or {}
         self._llm = get_llm_client()
+        # 从 YAML 加载评估配置
+        self._rubric_scales = get_config("analysis", "rubric_scales")
+        self._evaluation_dimensions = get_config("analysis", "evaluation_dimensions")
+        self._recommendation_levels = get_config("analysis", "recommendation_levels")
 
     async def analyze(
         self,
@@ -159,7 +52,7 @@ class AnalysisService:
 
         dimension_scores: Dict[str, Dict[str, Any]] = {}
         current_percent = 10
-        for key, config in EVALUATION_DIMENSIONS.items():
+        for key, config in self._evaluation_dimensions.items():
             dimension_scores[key] = await self._evaluate_dimension(key, candidate_profile, config)
             current_percent = min(90, current_percent + 20)
             update_progress(f"评估-{config['name']}", current_percent)
@@ -177,8 +70,8 @@ class AnalysisService:
             "recommendation": recommendation,
             "dimension_scores": dimension_scores,
             "comprehensive_report": report,
-            "rubric_scales": RUBRIC_SCALES,
-            "evaluation_dimensions": EVALUATION_DIMENSIONS,
+            "rubric_scales": self._rubric_scales,
+            "evaluation_dimensions": self._evaluation_dimensions,
         }
 
     def _build_candidate_profile(
@@ -236,7 +129,8 @@ class AnalysisService:
     async def _evaluate_dimension(self, key: str, profile: str, config: Dict[str, Any]) -> Dict[str, Any]:
         """按维度评估。"""
         subs = config["sub_dimensions"]
-        system_prompt = SYSTEM_PROMPT_DIMENSION.format(
+        system_prompt = get_prompt(
+            "analysis", "dimension_evaluation",
             dimension_name=config["name"],
             sub_dimensions_block="\n".join(f"- {sd}" for sd in subs),
             sd0=subs[0],
@@ -277,7 +171,7 @@ class AnalysisService:
 
     def _determine_recommendation(self, final_score: float) -> Dict[str, Any]:
         """根据分数匹配推荐等级。"""
-        for level_key, cfg in RECOMMENDATION_LEVELS.items():
+        for level_key, cfg in self._recommendation_levels.items():
             if final_score >= cfg["min_score"]:
                 return {
                     "level": level_key,
@@ -315,7 +209,8 @@ class AnalysisService:
 3. 潜在风险（1-2点）
 4. 最终建议"""
         try:
-            return await self._llm.complete(SYSTEM_PROMPT_REPORT, user_prompt, temperature=0.4)
+            system_prompt = get_prompt("analysis", "comprehensive_report")
+            return await self._llm.complete(system_prompt, user_prompt, temperature=0.4)
         except Exception as exc:
             logger.error("生成综合报告失败: {}", exc)
             return f"""## {candidate_name} 综合分析报告

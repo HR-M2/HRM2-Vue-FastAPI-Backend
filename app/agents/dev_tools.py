@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 开发测试工具：随机简历生成。
 """
@@ -8,33 +9,7 @@ from typing import Dict, Any, List
 from loguru import logger
 
 from .llm_client import get_llm_client
-
-# ================= 提示词模板 =================
-
-SYSTEM_PROMPT_GENERATE_RESUME = """你是一个简历生成器，用于生成测试数据。请根据给定的岗位要求生成一份虚构但真实感强的简历。
-
-要求：
-1. 简历内容要有一定的随机性和多样性
-2. 候选人的背景、技能水平、工作经验应该有变化（不要每次都是完美匹配）
-3. 有些简历可以是优秀候选人，有些可以是一般候选人，有些可以是不太匹配的候选人
-4. 简历格式要自然，像真实简历一样
-5. 包含：基本信息、教育背景、工作经历、项目经验、技能特长、自我评价等
-6. 工作经历和项目经验要具体，包含时间、公司/项目名称、职责描述
-7. 技能水平可以随机（精通/熟练/了解）
-8. 教育背景可以随机（本科/硕士/大专等）
-
-直接输出简历内容文本，不要有任何额外说明。"""
-
-USER_PROMPT_TEMPLATE = """请为候选人“{candidate_name}”生成一份应聘以下岗位的简历：
-
-岗位名称：{position}
-岗位描述：{description}
-必备技能：{required_skills}
-可选技能：{optional_skills}
-最低经验：{min_experience}年
-学历要求：{education}
-
-请生成一份完整的简历，确保内容有一定随机性。这次生成的候选人匹配程度请随机决定（可能是很匹配、一般匹配或不太匹配）。"""
+from .prompts import get_prompt
 
 
 # ================= 随机姓名字符集 =================
@@ -73,7 +48,8 @@ class DevToolsService:
         """生成单份随机简历。"""
         candidate_name = candidate_name or _generate_random_name()
 
-        user_prompt = USER_PROMPT_TEMPLATE.format(
+        user_prompt = get_prompt(
+            "dev_tools", "generate_resume_user",
             candidate_name=candidate_name,
             position=position_data.get("title", "未知岗位"),
             description=position_data.get("description", ""),
@@ -83,8 +59,9 @@ class DevToolsService:
             education=", ".join(position_data.get("education", [])),
         )
 
+        system_prompt = get_prompt("dev_tools", "generate_resume_system")
         content = await self._llm.complete(
-            SYSTEM_PROMPT_GENERATE_RESUME,
+            system_prompt,
             user_prompt,
             temperature=0.9,
         )
