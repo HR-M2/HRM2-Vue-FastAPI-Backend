@@ -229,6 +229,31 @@ async def complete_session(
     )
 
 
+@router.patch("/{session_id}", summary="更新面试会话", response_model=ResponseModel[InterviewSessionResponse])
+async def update_interview_session(
+    session_id: str,
+    data: InterviewSessionUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    更新面试会话（支持人工编辑报告）
+    """
+    session = await interview_crud.get(db, session_id)
+    if not session:
+        raise NotFoundException(f"面试会话不存在: {session_id}")
+    
+    session = await interview_crud.update(db, db_obj=session, obj_in=data)
+    
+    response = InterviewSessionResponse.model_validate(session)
+    response.messages = [QAMessage(**m) for m in (session.messages or [])]
+    response.message_count = session.message_count
+    
+    return success_response(
+        data=response.model_dump(),
+        message="面试会话更新成功"
+    )
+
+
 @router.delete("/{session_id}", summary="删除面试会话", response_model=MessageResponse)
 async def delete_interview_session(
     session_id: str,
