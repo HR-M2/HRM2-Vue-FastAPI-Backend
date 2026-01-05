@@ -49,6 +49,19 @@ HRM2-Vue-FastAPI-Backend/
 │   │   ├── interview.py        # 面试辅助
 │   │   ├── analysis.py         # 综合分析
 │   │   └── ai_services.py      # AI 服务接口
+│   ├── agents/              # AI Agent 服务
+│   │   ├── prompts/            # Prompt 配置 (YAML)
+│   │   │   ├── screening.yaml     # 筛选流程 prompts
+│   │   │   ├── interview.yaml     # 面试流程 prompts
+│   │   │   ├── analysis.yaml      # 分析流程 prompts
+│   │   │   └── ...
+│   │   ├── base.py             # Agent 基类
+│   │   ├── llm_client.py       # LLM 客户端
+│   │   ├── screening.py        # 简历筛选 Agent
+│   │   ├── interview.py        # 面试辅助 Agent
+│   │   ├── analysis.py         # 综合分析 Agent
+│   │   ├── position.py         # 岗位分析 Agent
+│   │   └── dev_tools.py        # 开发工具服务
 │   ├── core/                # 核心模块
 │   │   ├── config.py           # 配置管理
 │   │   ├── database.py         # 数据库配置
@@ -57,15 +70,6 @@ HRM2-Vue-FastAPI-Backend/
 │   │   └── progress_cache.py   # 任务进度缓存
 │   ├── models/              # SQLModel 模型（Table + Schema 统一）
 │   ├── crud/                # CRUD 操作
-│   ├── services/            # 业务服务层
-│   │   └── agents/             # AI Agent 服务
-│   │       ├── base.py            # Agent 基类
-│   │       ├── llm_client.py      # LLM 客户端
-│   │       ├── screening.py       # 简历筛选 Agent
-│   │       ├── interview.py       # 面试辅助 Agent
-│   │       ├── analysis.py        # 综合分析 Agent
-│   │       ├── position.py        # 岗位分析 Agent
-│   │       └── dev_tools.py       # 开发工具服务
 │   └── main.py              # 应用入口
 ├── Docs/                    # 开发文档
 ├── data/                    # SQLite 数据库文件

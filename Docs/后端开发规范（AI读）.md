@@ -15,7 +15,8 @@
 API 层 (app/api/v1/)     → 路由、参数校验、调用 CRUD
 CRUD 层 (app/crud/)      → 数据库操作，继承 CRUDBase
 Models 层 (app/models/)  → SQLModel 统一定义 Table + Schema
-Services 层 (app/services/agents/) → AI Agent 业务逻辑
+Agents 层 (app/agents/)  → AI Agent 业务逻辑
+  └── prompts/           → YAML 格式的 Prompt 配置
 Core 层 (app/core/)      → 配置、数据库、响应、异常
 ```
 
@@ -65,9 +66,11 @@ async def get_items(page: int = Query(1, ge=1), db: AsyncSession = Depends(get_d
 
 ## Agent 开发规范
 
-- 继承 `BaseAgentManager`
-- Prompt 定义为模块常量，使用 `.format()` 填充
-- 实现 `setup()` 和 `run_{function}()` 方法
+- Prompts 存放于 `app/agents/prompts/*.yaml`
+- 使用 `from .prompts import get_prompt, get_config` 加载
+- 调用示例：`get_prompt("screening", "hr_system", hr_rules=rules)`
+- 配置加载：`get_config("analysis", "evaluation_dimensions")`
+- 继承 `BaseAgentManager`，实现 `setup()` 和 `run_{function}()` 方法
 
 ## 类型注解
 

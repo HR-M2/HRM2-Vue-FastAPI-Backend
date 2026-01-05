@@ -1,6 +1,12 @@
 """
-agents 模块入口。
-提供各子模块的便捷导出。
+AI Agents 模块
+
+提供 HR 智能招聘系统的 AI 代理服务：
+- PositionService: 智能岗位需求生成
+- ScreeningAgentManager: 多代理简历筛选
+- InterviewService: 智能面试辅助
+- AnalysisService: 综合评估分析
+- DevToolsService: 开发测试工具
 """
 
 from .llm_client import get_llm_client, get_embedding_config, get_task_limiter

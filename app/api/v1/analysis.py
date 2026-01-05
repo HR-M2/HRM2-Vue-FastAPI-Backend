@@ -22,7 +22,7 @@ from app.models import (
     ComprehensiveAnalysisResponse,
     ComprehensiveAnalysisUpdate,
 )
-from app.services.agents import AnalysisService, get_llm_client
+from app.agents import AnalysisService, get_llm_client
 
 router = APIRouter()
 
