@@ -48,6 +48,7 @@ HRM2-Vue-FastAPI-Backend/
 │   │   ├── video.py            # 视频分析
 │   │   ├── interview.py        # 面试辅助
 │   │   ├── analysis.py         # 综合分析
+│   │   ├── feedback.py         # 反馈与经验学习 (RAG)
 │   │   └── ai_services.py      # AI 服务接口
 │   ├── agents/              # AI Agent 服务
 │   │   ├── prompts/            # Prompt 配置 (YAML)
@@ -163,10 +164,10 @@ LLM_TIMEOUT=120
 LLM_MAX_CONCURRENCY=2
 LLM_RATE_LIMIT=60
 
-# Embedding 配置 (可选)
-EMBEDDING_MODEL=
-EMBEDDING_API_KEY=
-EMBEDDING_BASE_URL=
+# Embedding 配置 (RAG 经验库必需)
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_API_KEY=your-api-key-here
+EMBEDDING_BASE_URL=https://api.openai.com/v1
 ```
 
 ## 📝 统一响应格式
