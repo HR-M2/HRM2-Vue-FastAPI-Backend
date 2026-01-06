@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     llm_max_concurrency: int = 5
     llm_rate_limit: int = 60
     
+    # Embedding 配置
+    embedding_model: str = ""
+    embedding_api_key: str = ""
+    embedding_base_url: str = ""
+    
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):

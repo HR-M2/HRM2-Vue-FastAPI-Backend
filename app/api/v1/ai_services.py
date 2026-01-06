@@ -29,6 +29,7 @@ from app.agents import (
     AnalysisService,
     get_dev_tools_service,
     get_task_limiter,
+    get_experience_manager,
 )
 
 router = APIRouter()
@@ -170,6 +171,22 @@ async def run_screening_task(
         
         # 初始化进度缓存
         progress_cache.update(task_id, progress=5, current_speaker="初始化")
+        
+        # 检索历史经验并注入到筛选条件（RAG经验检索）
+        experience_text = ""
+        try:
+            async with async_session() as session:
+                exp_manager = get_experience_manager()
+                context = f"筛选报告 - 岗位: {criteria.get('position', '未知')}"
+                experiences = await exp_manager.recall(session, "screening", context, top_k=5)
+                if experiences:
+                    experience_text = exp_manager.format_experiences_for_prompt(experiences)
+        except Exception as exp_err:
+            logger.warning("检索筛选经验失败: {}", exp_err)
+        
+        # 将经验注入到筛选条件中
+        if experience_text:
+            criteria["experience_guidance"] = experience_text
         
         # 创建筛选代理管理器
         manager = ScreeningAgentManager(criteria)
@@ -544,10 +561,23 @@ async def ai_generate_report(
             candidate_name = session.application.resume.candidate_name
     
     agent = InterviewService(job_config)
+    
+    # 检索面试相关历史经验（RAG）
+    hr_notes_with_experience = data.hr_notes or ""
+    try:
+        exp_manager = get_experience_manager()
+        context = f"面试报告 - 岗位: {job_config.get('title', '未知')}"
+        experiences = await exp_manager.recall(db, "interview", context, top_k=5)
+        if experiences:
+            experience_text = exp_manager.format_experiences_for_prompt(experiences)
+            hr_notes_with_experience = f"{experience_text}\n\n{hr_notes_with_experience}" if hr_notes_with_experience else experience_text
+    except Exception as exp_err:
+        logger.warning("检索面试经验失败: {}", exp_err)
+    
     report = await agent.generate_final_report(
         candidate_name=candidate_name,
         messages=session.messages,
-        hr_notes=data.hr_notes
+        hr_notes=hr_notes_with_experience
     )
     
     # 更新会话
@@ -641,6 +671,21 @@ async def ai_comprehensive_analysis(
     if interview_session:
         interview_records = interview_session.messages or []
         interview_report = interview_session.report or {}
+    
+    # 检索综合分析相关历史经验（RAG）
+    experience_guidance = ""
+    try:
+        exp_manager = get_experience_manager()
+        context = f"综合分析 - 岗位: {job_config.get('title', '未知')}"
+        experiences = await exp_manager.recall(db, "analysis", context, top_k=5)
+        if experiences:
+            experience_guidance = exp_manager.format_experiences_for_prompt(experiences)
+    except Exception as exp_err:
+        logger.warning("检索分析经验失败: {}", exp_err)
+    
+    # 将经验注入到简历内容前面
+    if experience_guidance:
+        resume_content = f"{experience_guidance}\n\n---\n\n{resume_content}"
     
     # 执行综合分析
     analyzer = AnalysisService(job_config)

@@ -3,7 +3,7 @@ API 路由模块
 """
 from fastapi import APIRouter
 
-from .v1 import positions, resumes, applications, screening, video, interview, analysis, ai_services
+from .v1 import positions, resumes, applications, screening, video, interview, analysis, ai_services, feedback
 
 # 创建主路由
 api_router = APIRouter()
@@ -49,3 +49,9 @@ api_router.include_router(
     prefix="/ai",
     tags=["AI服务"]
 )
+api_router.include_router(
+    feedback.router,
+    prefix="/feedback",
+    tags=["经验反馈"]
+)
+
