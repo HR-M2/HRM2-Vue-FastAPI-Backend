@@ -7,6 +7,7 @@ from sqlmodel import SQLModel, Field, Relationship, Column, JSON, UniqueConstrai
 from sqlalchemy import Column as SAColumn, String, ForeignKey
 
 from .base import SQLModelBase, TimestampMixin, IDMixin, TimestampResponse
+from .experience import AppliedExperienceItem
 
 if TYPE_CHECKING:
     from .application import Application
@@ -77,6 +78,13 @@ class ComprehensiveAnalysis(TimestampMixin, IDMixin, SQLModel, table=True):
         description="输入数据快照"
     )
     
+    # RAG 经验引用记录（用于追溯 AI 决策依据）
+    applied_experience_ids: Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSON),
+        description="本次综合分析引用的经验 ID 列表"
+    )
+    
     # 关联关系
     application: Optional["Application"] = Relationship(back_populates="comprehensive_analysis")
     
@@ -100,6 +108,7 @@ class ComprehensiveAnalysisUpdate(SQLModelBase):
     dimension_scores: Optional[Dict] = Field(None, description="各维度评分")
     report: Optional[str] = Field(None, description="分析报告")
     input_snapshot: Optional[Dict] = Field(None, description="输入数据快照")
+    applied_experience_ids: Optional[List[str]] = Field(None, description="引用的经验 ID 列表")
 
 
 # ==================== 响应 Schema ====================
@@ -114,7 +123,11 @@ class ComprehensiveAnalysisResponse(TimestampResponse):
     dimension_scores: Dict[str, DimensionScoreItem] = Field(default_factory=dict)
     report: Optional[str]
     input_snapshot: Dict
+    applied_experience_ids: Optional[List[str]] = None
     
     # 关联信息
     candidate_name: Optional[str] = None
     position_title: Optional[str] = None
+    
+    # 引用的经验详情（由 API 填充）
+    applied_experiences: Optional[List[AppliedExperienceItem]] = None

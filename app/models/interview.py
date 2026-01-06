@@ -7,6 +7,7 @@ from sqlmodel import SQLModel, Field, Relationship, Column, JSON, UniqueConstrai
 from sqlalchemy import Column as SAColumn, String, ForeignKey
 
 from .base import SQLModelBase, TimestampMixin, IDMixin, TimestampResponse
+from .experience import AppliedExperienceItem
 
 if TYPE_CHECKING:
     from .application import Application
@@ -38,14 +39,6 @@ class GenerateQuestionsRequest(SQLModelBase):
     count: int = Field(5, ge=1, le=20, description="生成问题数量")
     difficulty: str = Field("medium", description="难度: easy/medium/hard")
     focus_areas: Optional[List[str]] = Field(None, description="关注领域")
-
-
-class AppliedExperienceItem(SQLModelBase):
-    """引用的经验详情（用于 API 响应）"""
-    id: str = Field(..., description="经验 ID")
-    learned_rule: str = Field(..., description="AI 提炼的规则")
-    source_feedback: str = Field(..., description="HR 原始反馈")
-    category: str = Field(..., description="经验类别")
 
 
 # ==================== 表模型 ====================

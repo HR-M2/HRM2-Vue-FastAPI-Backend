@@ -112,6 +112,26 @@ async def create_analysis(
         interview_records = interview_session.messages or []
         interview_report = interview_session.report or {}
     
+    # 检索综合分析相关历史经验（RAG）
+    from app.agents import get_experience_manager
+    from loguru import logger
+    
+    experience_guidance = ""
+    applied_experience_ids: list = []
+    try:
+        exp_manager = get_experience_manager()
+        context = f"综合分析 - 岗位: {job_config.get('title', '未知')}"
+        experiences = await exp_manager.recall(db, "analysis", context, top_k=5)
+        if experiences:
+            experience_guidance = exp_manager.format_experiences_for_prompt(experiences)
+            applied_experience_ids = [exp.id for exp in experiences]
+    except Exception as exp_err:
+        logger.warning("检索分析经验失败: {}", exp_err)
+    
+    # 将经验注入到简历内容前面
+    if experience_guidance:
+        resume_content = f"{experience_guidance}\n\n---\n\n{resume_content}"
+    
     # 执行 AI 综合分析
     analyzer = AnalysisService(job_config)
     ai_result = await analyzer.analyze(
@@ -140,7 +160,8 @@ async def create_analysis(
         "input_snapshot": {
             "position": application.position.title if application.position else None,
             "candidate": candidate_name,
-        }
+        },
+        "applied_experience_ids": applied_experience_ids if applied_experience_ids else None,
     }
     
     # 根据是否已有记录决定创建或更新
@@ -188,6 +209,21 @@ async def get_analysis(
             response.candidate_name = analysis.application.resume.candidate_name
         if analysis.application.position:
             response.position_title = analysis.application.position.title
+    
+    # 如果有引用的经验 ID，获取经验详情
+    if analysis.applied_experience_ids:
+        from app.crud import experience_crud
+        from app.models import AppliedExperienceItem
+        experiences = await experience_crud.get_by_ids(db, analysis.applied_experience_ids)
+        response.applied_experiences = [
+            AppliedExperienceItem(
+                id=exp.id,
+                learned_rule=exp.learned_rule,
+                source_feedback=exp.source_feedback,
+                category=exp.category,
+            )
+            for exp in experiences
+        ]
     
     return success_response(data=response.model_dump())
 

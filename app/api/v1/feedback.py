@@ -129,25 +129,92 @@ async def create_experience(
     context_summary: str = Query("手动添加", description="上下文摘要"),
     db: AsyncSession = Depends(get_db),
 ):
-    """手动添加一条经验规则"""
+    """手动添加一条经验规则（自动向量化）"""
     from app.crud import experience_crud
     from app.models import AgentExperienceCreate, ExperienceCategory
+    from app.core.embedding import get_embedding_client
     
     if category not in [e.value for e in ExperienceCategory]:
         raise BadRequestException(f"无效类别: {category}")
+    
+    # 自动向量化
+    embedding = None
+    embedding_client = get_embedding_client()
+    if embedding_client.is_configured():
+        try:
+            embedding = await embedding_client.embed(learned_rule)
+        except Exception as exc:
+            logger.warning("向量化失败，将创建无向量经验: {}", exc)
     
     experience_data = AgentExperienceCreate(
         category=category,
         source_feedback="[手动添加]",
         learned_rule=learned_rule,
         context_summary=context_summary,
-        embedding=None,
+        embedding=embedding,
     )
     
     experience = await experience_crud.create(db, obj_in=experience_data)
     return success_response(
-        data={"id": experience.id, "learned_rule": experience.learned_rule},
+        data={"id": experience.id, "learned_rule": experience.learned_rule, "has_embedding": embedding is not None},
         message="经验已添加"
+    )
+
+
+@router.post("/experiences/backfill-embeddings", summary="补全缺失的向量")
+async def backfill_embeddings(
+    category: Optional[str] = Query(None, description="按类别筛选，不填则处理全部"),
+    db: AsyncSession = Depends(get_db),
+):
+    """为缺失向量的经验补全 Embedding"""
+    from app.crud import experience_crud
+    from app.core.embedding import get_embedding_client
+    
+    embedding_client = get_embedding_client()
+    if not embedding_client.is_configured():
+        raise BadRequestException("Embedding 服务未配置")
+    
+    # 获取所有经验
+    if category:
+        if category not in [e.value for e in ExperienceCategory]:
+            raise BadRequestException(f"无效类别: {category}")
+        all_experiences = await experience_crud.get_all_by_category(db, category)
+    else:
+        # 获取所有类别的经验
+        all_experiences = []
+        for cat in ExperienceCategory:
+            exps = await experience_crud.get_all_by_category(db, cat.value)
+            all_experiences.extend(exps)
+    
+    # 筛选出没有向量的经验
+    missing = [exp for exp in all_experiences if not exp.embedding]
+    
+    if not missing:
+        return success_response(
+            data={"processed": 0, "total": len(all_experiences)},
+            message="所有经验都已有向量，无需补全"
+        )
+    
+    # 逐条补全向量
+    success_count = 0
+    failed_ids = []
+    for exp in missing:
+        try:
+            embedding = await embedding_client.embed(exp.learned_rule)
+            await experience_crud.update(db, db_obj=exp, obj_in={"embedding": embedding})
+            success_count += 1
+        except Exception as exc:
+            logger.warning("经验 {} 向量化失败: {}", exp.id, exc)
+            failed_ids.append(exp.id)
+    
+    return success_response(
+        data={
+            "processed": success_count,
+            "failed": len(failed_ids),
+            "failed_ids": failed_ids,
+            "total": len(all_experiences),
+        },
+        message=f"已补全 {success_count} 条经验的向量"
     )
 
 

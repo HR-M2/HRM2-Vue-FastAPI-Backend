@@ -28,6 +28,14 @@ class AgentExperienceBase(SQLModelBase):
     context_summary: str = Field(..., description="触发经验的上下文摘要")
 
 
+class AppliedExperienceItem(SQLModelBase):
+    """引用的经验详情（用于 API 响应，展示报告引用了哪些历史经验）"""
+    id: str = Field(..., description="经验 ID")
+    learned_rule: str = Field(..., description="AI 提炼的规则")
+    source_feedback: str = Field(..., description="HR 原始反馈")
+    category: str = Field(..., description="经验类别")
+
+
 # ==================== 表模型 ====================
 
 class AgentExperience(AgentExperienceBase, TimestampMixin, IDMixin, SQLModel, table=True):
