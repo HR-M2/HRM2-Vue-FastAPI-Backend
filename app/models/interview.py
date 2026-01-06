@@ -66,7 +66,7 @@ class InterviewSession(TimestampMixin, IDMixin, SQLModel, table=True):
     # 面试报告
     is_completed: bool = Field(False, description="是否已完成")
     final_score: Optional[float] = Field(None, ge=0, le=100, description="最终评分")
-    report: Optional[dict] = Field(default=None, sa_column=Column(JSON), description="面试报告(JSON)")
+    report: Optional[dict] = Field(default=None, sa_column=Column(JSON), description="面试报告(JSON) - DEPRECATED: 请使用 report_markdown 字段")
     report_markdown: Optional[str] = Field(None, description="面试报告(Markdown)")
     
     # 关联关系

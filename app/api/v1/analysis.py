@@ -192,6 +192,29 @@ async def get_analysis(
     return success_response(data=response.model_dump())
 
 
+@router.patch("/{analysis_id}", summary="更新综合分析", response_model=ResponseModel[ComprehensiveAnalysisResponse])
+async def update_analysis(
+    analysis_id: str,
+    data: ComprehensiveAnalysisUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    更新综合分析（支持人工编辑报告）
+    """
+    analysis = await analysis_crud.get(db, analysis_id)
+    if not analysis:
+        raise NotFoundException(f"综合分析不存在: {analysis_id}")
+    
+    analysis = await analysis_crud.update(db, db_obj=analysis, obj_in=data)
+    
+    response = ComprehensiveAnalysisResponse.model_validate(analysis)
+    
+    return success_response(
+        data=response.model_dump(),
+        message="综合分析更新成功"
+    )
+
+
 @router.delete("/{analysis_id}", summary="删除综合分析", response_model=MessageResponse)
 async def delete_analysis(
     analysis_id: str,
