@@ -30,6 +30,14 @@ class ScreeningScore(SQLModelBase):
     manager_score: Optional[int] = Field(None, description="管理评分")
 
 
+class AppliedExperienceItem(SQLModelBase):
+    """引用的经验详情（用于 API 响应）"""
+    id: str = Field(..., description="经验 ID")
+    learned_rule: str = Field(..., description="AI 提炼的规则")
+    source_feedback: str = Field(..., description="HR 原始反馈")
+    category: str = Field(..., description="经验类别")
+
+
 # ==================== 表模型 ====================
 
 class ScreeningTask(TimestampMixin, IDMixin, SQLModel, table=True):
@@ -108,5 +116,5 @@ class ScreeningTaskResponse(TimestampResponse):
     position_title: Optional[str] = None
     resume_content: Optional[str] = None
     
-    # 引用的经验详情（可选，由 API 填充）
-    applied_experiences: Optional[List[dict]] = None
+    # 引用的经验详情（由 API 填充）
+    applied_experiences: Optional[List[AppliedExperienceItem]] = None

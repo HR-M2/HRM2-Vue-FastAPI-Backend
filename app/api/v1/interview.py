@@ -120,14 +120,15 @@ async def get_interview_session(
     # 如果有引用的经验 ID，获取经验详情
     if session.applied_experience_ids:
         from app.crud import experience_crud
+        from app.models import AppliedExperienceItem
         experiences = await experience_crud.get_by_ids(db, session.applied_experience_ids)
         response.applied_experiences = [
-            {
-                "id": exp.id,
-                "learned_rule": exp.learned_rule,
-                "source_feedback": exp.source_feedback,
-                "category": exp.category,
-            }
+            AppliedExperienceItem(
+                id=exp.id,
+                learned_rule=exp.learned_rule,
+                source_feedback=exp.source_feedback,
+                category=exp.category,
+            )
             for exp in experiences
         ]
     

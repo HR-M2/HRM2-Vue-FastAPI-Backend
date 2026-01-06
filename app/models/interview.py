@@ -40,6 +40,14 @@ class GenerateQuestionsRequest(SQLModelBase):
     focus_areas: Optional[List[str]] = Field(None, description="关注领域")
 
 
+class AppliedExperienceItem(SQLModelBase):
+    """引用的经验详情（用于 API 响应）"""
+    id: str = Field(..., description="经验 ID")
+    learned_rule: str = Field(..., description="AI 提炼的规则")
+    source_feedback: str = Field(..., description="HR 原始反馈")
+    category: str = Field(..., description="经验类别")
+
+
 # ==================== 表模型 ====================
 
 class InterviewSession(TimestampMixin, IDMixin, SQLModel, table=True):
@@ -138,5 +146,5 @@ class InterviewSessionResponse(TimestampResponse):
     candidate_name: Optional[str] = None
     position_title: Optional[str] = None
     
-    # 引用的经验详情（可选，由 API 填充）
-    applied_experiences: Optional[List[Dict]] = None
+    # 引用的经验详情（由 API 填充）
+    applied_experiences: Optional[List[AppliedExperienceItem]] = None
