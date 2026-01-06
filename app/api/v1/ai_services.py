@@ -174,6 +174,7 @@ async def run_screening_task(
         
         # 检索历史经验并注入到筛选条件（RAG经验检索）
         experience_text = ""
+        applied_experience_ids: List[str] = []  # 记录引用的经验 ID
         try:
             async with async_session() as session:
                 exp_manager = get_experience_manager()
@@ -181,6 +182,8 @@ async def run_screening_task(
                 experiences = await exp_manager.recall(session, "screening", context, top_k=5)
                 if experiences:
                     experience_text = exp_manager.format_experiences_for_prompt(experiences)
+                    # 提取经验 ID 用于持久化
+                    applied_experience_ids = [exp.id for exp in experiences]
         except Exception as exp_err:
             logger.warning("检索筛选经验失败: {}", exp_err)
         
@@ -214,6 +217,9 @@ async def run_screening_task(
                 task.score = result.get("comprehensive_score", 0)
                 task.dimension_scores = result.get("dimension_scores")
                 task.summary = result.get("summary", "")
+                # 保存引用的经验 ID，便于追溯 AI 决策依据
+                if applied_experience_ids:
+                    task.applied_experience_ids = applied_experience_ids
                 await session.commit()
                 
     except Exception as e:
@@ -564,6 +570,7 @@ async def ai_generate_report(
     
     # 检索面试相关历史经验（RAG）
     hr_notes_with_experience = data.hr_notes or ""
+    applied_experience_ids: List[str] = []  # 记录引用的经验 ID
     try:
         exp_manager = get_experience_manager()
         context = f"面试报告 - 岗位: {job_config.get('title', '未知')}"
@@ -571,6 +578,8 @@ async def ai_generate_report(
         if experiences:
             experience_text = exp_manager.format_experiences_for_prompt(experiences)
             hr_notes_with_experience = f"{experience_text}\n\n{hr_notes_with_experience}" if hr_notes_with_experience else experience_text
+            # 提取经验 ID 用于持久化
+            applied_experience_ids = [exp.id for exp in experiences]
     except Exception as exp_err:
         logger.warning("检索面试经验失败: {}", exp_err)
     
@@ -587,7 +596,9 @@ async def ai_generate_report(
         is_completed=True,
         final_score=final_score,
         report=report,
-        report_markdown=_format_report_markdown(report, candidate_name)
+        report_markdown=_format_report_markdown(report, candidate_name),
+        # 保存引用的经验 ID，便于追溯 AI 决策依据
+        applied_experience_ids=applied_experience_ids if applied_experience_ids else None
     )
     await interview_crud.update(db, db_obj=session, obj_in=update_data)
     
@@ -674,12 +685,15 @@ async def ai_comprehensive_analysis(
     
     # 检索综合分析相关历史经验（RAG）
     experience_guidance = ""
+    applied_experience_ids: List[str] = []  # 记录引用的经验 ID
     try:
         exp_manager = get_experience_manager()
         context = f"综合分析 - 岗位: {job_config.get('title', '未知')}"
         experiences = await exp_manager.recall(db, "analysis", context, top_k=5)
         if experiences:
             experience_guidance = exp_manager.format_experiences_for_prompt(experiences)
+            # 提取经验 ID 用于持久化
+            applied_experience_ids = [exp.id for exp in experiences]
     except Exception as exp_err:
         logger.warning("检索分析经验失败: {}", exp_err)
     
@@ -696,6 +710,10 @@ async def ai_comprehensive_analysis(
         interview_records=interview_records,
         interview_report=interview_report,
     )
+    
+    # 将引用的经验 ID 附加到结果中
+    if applied_experience_ids:
+        result["applied_experience_ids"] = applied_experience_ids
     
     return success_response(data=result, message="综合分析完成")
 

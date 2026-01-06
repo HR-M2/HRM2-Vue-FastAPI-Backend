@@ -86,6 +86,34 @@ class CRUDExperience(CRUDBase[AgentExperience]):
             .where(self.model.category == category)
         )
         return result.scalar() or 0
+    
+    async def get_by_ids(
+        self,
+        db: AsyncSession,
+        ids: List[str]
+    ) -> List[AgentExperience]:
+        """
+        根据 ID 列表批量获取经验
+        
+        Args:
+            db: 数据库会话
+            ids: 经验 ID 列表
+            
+        Returns:
+            经验列表（保持输入顺序）
+        """
+        if not ids:
+            return []
+        
+        result = await db.execute(
+            select(self.model)
+            .where(self.model.id.in_(ids))
+        )
+        experiences = list(result.scalars().all())
+        
+        # 按输入 ID 顺序排序
+        id_to_exp = {exp.id: exp for exp in experiences}
+        return [id_to_exp[id] for id in ids if id in id_to_exp]
 
 
 # 单例实例

@@ -80,23 +80,26 @@ class ExperienceManager:
         category: str,
         context: str,
         top_k: int = 5,
+        threshold: float = 0.7,
     ) -> List[AgentExperience]:
         """
-        语义检索相关经验
+        语义检索相关经验（带相似度阈值过滤）
         
         流程：
         1. 对当前上下文生成 Embedding
         2. 在同类别经验中按余弦相似度排序
-        3. 返回 Top-K 最相关经验
+        3. 过滤低于阈值的经验，避免噪声干扰
+        4. 返回 Top-K 最相关经验
         
         Args:
             db: 数据库会话
             category: 经验类别
             context: 当前上下文
             top_k: 返回数量
+            threshold: 相似度阈值，低于此值的经验将被过滤（默认 0.7）
             
         Returns:
-            相关经验列表（按相似度降序）
+            相关经验列表（按相似度降序，仅包含高于阈值的经验）
         """
         # 获取该类别的所有经验
         all_experiences = await experience_crud.get_all_by_category(db, category)
@@ -108,19 +111,34 @@ class ExperienceManager:
         # 生成当前上下文的向量
         context_embedding = await self._get_embedding(context)
         
-        # 计算相似度并排序
+        # 如果无法生成向量，返回空列表
+        if not context_embedding:
+            logger.warning("无法生成上下文向量，跳过经验检索")
+            return []
+        
+        # 计算相似度并过滤低于阈值的经验
         scored_experiences = []
         for exp in all_experiences:
             if exp.embedding:
                 similarity = cosine_similarity(context_embedding, exp.embedding)
-                scored_experiences.append((similarity, exp))
+                # 仅保留高于阈值的经验，避免不相关经验干扰 LLM 判断
+                if similarity >= threshold:
+                    scored_experiences.append((similarity, exp))
+                else:
+                    logger.debug(
+                        "经验 {} 相似度 {:.3f} 低于阈值 {:.2f}，已过滤",
+                        exp.id, similarity, threshold
+                    )
         
         # 按相似度降序排序
         scored_experiences.sort(key=lambda x: x[0], reverse=True)
         
         # 返回 Top-K
         result = [exp for _, exp in scored_experiences[:top_k]]
-        logger.debug("检索到 {} 条相关经验 (category={})", len(result), category)
+        logger.debug(
+            "检索到 {} 条相关经验 (category={}, threshold={:.2f})",
+            len(result), category, threshold
+        )
         
         return result
     

@@ -104,6 +104,9 @@ async def get_screening_task(
 ):
     """
     获取筛选任务详情
+    
+    如果任务引用了历史经验，会返回经验的详细内容，
+    便于用户了解 AI 的决策依据。
     """
     task = await screening_crud.get_with_application(db, task_id)
     if not task:
@@ -116,6 +119,21 @@ async def get_screening_task(
             response.resume_content = task.application.resume.content
         if task.application.position:
             response.position_title = task.application.position.title
+    
+    # 如果有引用的经验 ID，获取经验详情
+    if task.applied_experience_ids:
+        from app.crud import experience_crud
+        from app.models import AgentExperienceResponse
+        experiences = await experience_crud.get_by_ids(db, task.applied_experience_ids)
+        response.applied_experiences = [
+            {
+                "id": exp.id,
+                "learned_rule": exp.learned_rule,
+                "source_feedback": exp.source_feedback,
+                "category": exp.category,
+            }
+            for exp in experiences
+        ]
     
     return success_response(data=response.model_dump())
 

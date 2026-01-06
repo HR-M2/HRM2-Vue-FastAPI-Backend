@@ -99,6 +99,9 @@ async def get_interview_session(
 ):
     """
     获取面试会话详情
+    
+    如果会话报告引用了历史经验，会返回经验的详细内容，
+    便于用户了解 AI 的决策依据。
     """
     session = await interview_crud.get_with_application(db, session_id)
     if not session:
@@ -113,6 +116,20 @@ async def get_interview_session(
             response.candidate_name = session.application.resume.candidate_name
         if session.application.position:
             response.position_title = session.application.position.title
+    
+    # 如果有引用的经验 ID，获取经验详情
+    if session.applied_experience_ids:
+        from app.crud import experience_crud
+        experiences = await experience_crud.get_by_ids(db, session.applied_experience_ids)
+        response.applied_experiences = [
+            {
+                "id": exp.id,
+                "learned_rule": exp.learned_rule,
+                "source_feedback": exp.source_feedback,
+                "category": exp.category,
+            }
+            for exp in experiences
+        ]
     
     return success_response(data=response.model_dump())
 
