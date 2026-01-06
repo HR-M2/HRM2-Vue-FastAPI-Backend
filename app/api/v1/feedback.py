@@ -16,7 +16,7 @@ from app.core.database import get_db
 from app.core.response import success_response, ResponseModel
 from app.core.exceptions import NotFoundException, BadRequestException
 from app.crud import screening_crud, interview_crud, analysis_crud
-from app.models import FeedbackRequest, FeedbackResponse, ExperienceCategory
+from app.models import FeedbackRequest, FeedbackResponse, ExperienceCategory, ExperienceListData
 from app.agents import get_experience_manager, get_llm_client
 
 router = APIRouter()
@@ -67,7 +67,7 @@ async def submit_feedback(
     )
 
 
-@router.get("/experiences", summary="获取经验列表")
+@router.get("/experiences", summary="获取经验列表", response_model=ResponseModel[ExperienceListData])
 async def get_experiences(
     category: Optional[str] = Query(None, description="按类别筛选"),
     db: AsyncSession = Depends(get_db),
@@ -81,7 +81,12 @@ async def get_experiences(
     else:
         experiences = await experience_crud.get_multi(db, limit=50)
     
-    items = [AgentExperienceResponse.model_validate(exp).model_dump() for exp in experiences]
+    items = []
+    for exp in experiences:
+        item = AgentExperienceResponse.model_validate(exp).model_dump()
+        item["has_embedding"] = bool(exp.embedding)
+        items.append(item)
+    
     return success_response(data={"items": items, "total": len(items)})
 
 

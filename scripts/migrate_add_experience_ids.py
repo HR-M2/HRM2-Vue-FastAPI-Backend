@@ -2,7 +2,7 @@
 """
 数据库迁移脚本：添加 applied_experience_ids 字段
 
-为 screening_tasks 和 interview_sessions 表添加 applied_experience_ids 字段，
+为 screening_tasks、interview_sessions 和 comprehensive_analyses 表添加 applied_experience_ids 字段，
 用于记录 RAG 经验引用。
 
 使用方法：
@@ -33,32 +33,22 @@ def migrate():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
+    # 需要添加 applied_experience_ids 字段的表
+    tables = ["screening_tasks", "interview_sessions", "comprehensive_analyses"]
+    
     try:
-        # 检查并添加 screening_tasks.applied_experience_ids
-        cursor.execute("PRAGMA table_info(screening_tasks)")
-        columns = [col[1] for col in cursor.fetchall()]
-        
-        if "applied_experience_ids" not in columns:
-            print("为 screening_tasks 表添加 applied_experience_ids 字段...")
-            cursor.execute(
-                "ALTER TABLE screening_tasks ADD COLUMN applied_experience_ids TEXT"
-            )
-            print("✓ screening_tasks.applied_experience_ids 添加成功")
-        else:
-            print("✓ screening_tasks.applied_experience_ids 已存在，跳过")
-        
-        # 检查并添加 interview_sessions.applied_experience_ids
-        cursor.execute("PRAGMA table_info(interview_sessions)")
-        columns = [col[1] for col in cursor.fetchall()]
-        
-        if "applied_experience_ids" not in columns:
-            print("为 interview_sessions 表添加 applied_experience_ids 字段...")
-            cursor.execute(
-                "ALTER TABLE interview_sessions ADD COLUMN applied_experience_ids TEXT"
-            )
-            print("✓ interview_sessions.applied_experience_ids 添加成功")
-        else:
-            print("✓ interview_sessions.applied_experience_ids 已存在，跳过")
+        for table in tables:
+            cursor.execute(f"PRAGMA table_info({table})")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            if "applied_experience_ids" not in columns:
+                print(f"为 {table} 表添加 applied_experience_ids 字段...")
+                cursor.execute(
+                    f"ALTER TABLE {table} ADD COLUMN applied_experience_ids TEXT"
+                )
+                print(f"✓ {table}.applied_experience_ids 添加成功")
+            else:
+                print(f"✓ {table}.applied_experience_ids 已存在，跳过")
         
         conn.commit()
         print("\n迁移完成！")

@@ -71,10 +71,17 @@ class FeedbackRequest(SQLModelBase):
 
 class AgentExperienceResponse(TimestampResponse):
     """经验响应"""
-    category: str
-    source_feedback: str
-    learned_rule: str
-    context_summary: str
+    category: str = Field(..., description="经验类别")
+    source_feedback: str = Field(..., description="HR 原始反馈")
+    learned_rule: str = Field(..., description="AI 提炼的通用规则")
+    context_summary: str = Field(..., description="触发经验的上下文摘要")
+    has_embedding: bool = Field(False, description="是否已向量化")
+
+
+class ExperienceListData(SQLModelBase):
+    """经验列表数据"""
+    items: List[AgentExperienceResponse] = Field(..., description="经验列表")
+    total: int = Field(..., description="总数")
 
 
 class FeedbackResponse(SQLModelBase):

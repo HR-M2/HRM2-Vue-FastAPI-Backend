@@ -15,7 +15,7 @@ from .screening import ScreeningTask, ScreeningTaskCreate, ScreeningResultUpdate
 from .video import VideoAnalysis, VideoAnalysisCreate, VideoResultUpdate, VideoAnalysisResponse, BigFiveScores
 from .interview import InterviewSession, InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, QAMessage, QAMessageCreate, MessagesSyncRequest, GenerateQuestionsRequest
 from .analysis import ComprehensiveAnalysis, ComprehensiveAnalysisCreate, ComprehensiveAnalysisUpdate, ComprehensiveAnalysisResponse, RecommendationLevel, DimensionScoreItem
-from .experience import AgentExperience, AgentExperienceCreate, AgentExperienceResponse, ExperienceCategory, FeedbackRequest, FeedbackResponse, AppliedExperienceItem
+from .experience import AgentExperience, AgentExperienceCreate, AgentExperienceResponse, ExperienceCategory, FeedbackRequest, FeedbackResponse, AppliedExperienceItem, ExperienceListData
 
 __all__ = [
     # Base
@@ -81,4 +81,5 @@ __all__ = [
     "FeedbackRequest",
     "FeedbackResponse",
     "AppliedExperienceItem",
+    "ExperienceListData",
 ]
