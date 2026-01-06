@@ -97,7 +97,7 @@ async def delete_experience(
     if not experience:
         raise NotFoundException(f"经验不存在: {experience_id}")
     
-    await experience_crud.delete(db, experience_id)
+    await experience_crud.delete(db, id=experience_id)
     return success_response(message="经验已删除")
 
 
@@ -116,7 +116,7 @@ async def delete_all_experiences(
     
     count = 0
     for exp in experiences:
-        await experience_crud.delete(db, exp.id)
+        await experience_crud.delete(db, id=exp.id)
         count += 1
     
     return success_response(data={"deleted_count": count}, message=f"已删除 {count} 条经验")

@@ -49,7 +49,7 @@ class AgentExperience(AgentExperienceBase, TimestampMixin, IDMixin, SQLModel, ta
 
 class AgentExperienceCreate(AgentExperienceBase):
     """创建经验请求"""
-    embedding: List[float] = Field(..., description="文本向量")
+    embedding: Optional[List[float]] = Field(None, description="文本向量")
 
 
 class FeedbackRequest(SQLModelBase):
