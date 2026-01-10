@@ -103,7 +103,7 @@ def create_screening_agents(criteria: Dict[str, Any]) -> Tuple[UserProxyAgent, A
             required_skills=required_skills,
             min_experience=min_experience,
             salary_range=salary_range_str,
-        ),
+        ) + ("\n\n" + criteria.get("experience_guidance", "") if criteria.get("experience_guidance") else ""),
     )
 
     return user_proxy, assistant, hr_agent, technical_agent, manager_agent, critic

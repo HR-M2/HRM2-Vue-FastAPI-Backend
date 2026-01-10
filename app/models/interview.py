@@ -7,6 +7,7 @@ from sqlmodel import SQLModel, Field, Relationship, Column, JSON, UniqueConstrai
 from sqlalchemy import Column as SAColumn, String, ForeignKey
 
 from .base import SQLModelBase, TimestampMixin, IDMixin, TimestampResponse
+from .experience import AppliedExperienceItem
 
 if TYPE_CHECKING:
     from .application import Application
@@ -31,13 +32,6 @@ class QAMessageCreate(SQLModelBase):
 class MessagesSyncRequest(SQLModelBase):
     """同步消息请求"""
     messages: List[QAMessageCreate] = Field(..., description="完整对话记录")
-
-
-class GenerateQuestionsRequest(SQLModelBase):
-    """生成问题请求"""
-    count: int = Field(5, ge=1, le=20, description="生成问题数量")
-    difficulty: str = Field("medium", description="难度: easy/medium/hard")
-    focus_areas: Optional[List[str]] = Field(None, description="关注领域")
 
 
 # ==================== 表模型 ====================
@@ -68,6 +62,13 @@ class InterviewSession(TimestampMixin, IDMixin, SQLModel, table=True):
     final_score: Optional[float] = Field(None, ge=0, le=100, description="最终评分")
     report: Optional[dict] = Field(default=None, sa_column=Column(JSON), description="面试报告(JSON) - DEPRECATED: 请使用 report_markdown 字段")
     report_markdown: Optional[str] = Field(None, description="面试报告(Markdown)")
+    
+    # RAG 经验引用记录（用于追溯 AI 决策依据）
+    applied_experience_ids: Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSON),
+        description="本次面试报告引用的经验 ID 列表"
+    )
     
     # 关联关系
     application: Optional["Application"] = Relationship(back_populates="interview_session")
@@ -107,6 +108,7 @@ class InterviewSessionUpdate(SQLModelBase):
     final_score: Optional[float] = Field(None, ge=0, le=100)
     report: Optional[Dict] = None
     report_markdown: Optional[str] = None
+    applied_experience_ids: Optional[List[str]] = None
 
 
 # ==================== 响应 Schema ====================
@@ -122,9 +124,13 @@ class InterviewSessionResponse(TimestampResponse):
     final_score: Optional[float]
     report: Optional[Dict]
     report_markdown: Optional[str]
+    applied_experience_ids: Optional[List[str]] = None
     message_count: int = 0
     has_report: bool = False
     
     # 关联信息
     candidate_name: Optional[str] = None
     position_title: Optional[str] = None
+    
+    # 引用的经验详情（由 API 填充）
+    applied_experiences: Optional[List[AppliedExperienceItem]] = None

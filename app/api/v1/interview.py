@@ -21,7 +21,6 @@ from app.models import (
     InterviewSessionResponse,
     InterviewSessionUpdate,
     MessagesSyncRequest,
-    GenerateQuestionsRequest,
     QAMessage,
 )
 
@@ -99,6 +98,9 @@ async def get_interview_session(
 ):
     """
     获取面试会话详情
+    
+    如果会话报告引用了历史经验，会返回经验的详细内容，
+    便于用户了解 AI 的决策依据。
     """
     session = await interview_crud.get_with_application(db, session_id)
     if not session:
@@ -114,44 +116,22 @@ async def get_interview_session(
         if session.application.position:
             response.position_title = session.application.position.title
     
+    # 如果有引用的经验 ID，获取经验详情
+    if session.applied_experience_ids:
+        from app.crud import experience_crud
+        from app.models import AppliedExperienceItem
+        experiences = await experience_crud.get_by_ids(db, session.applied_experience_ids)
+        response.applied_experiences = [
+            AppliedExperienceItem(
+                id=exp.id,
+                learned_rule=exp.learned_rule,
+                source_feedback=exp.source_feedback,
+                category=exp.category,
+            )
+            for exp in experiences
+        ]
+    
     return success_response(data=response.model_dump())
-
-
-@router.post("/{session_id}/questions", summary="生成面试问题", response_model=DictResponse)
-async def generate_questions(
-    session_id: str,
-    data: GenerateQuestionsRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    为面试会话生成问题池（AI 生成）
-    
-    注意: 实际 AI 生成逻辑需要在 services 层实现
-    """
-    session = await interview_crud.get_with_application(db, session_id)
-    if not session:
-        raise NotFoundException(f"面试会话不存在: {session_id}")
-    
-    if session.is_completed:
-        raise BadRequestException("面试会话已结束")
-    
-    # TODO: 调用 AI 服务生成问题
-    # 这里返回占位数据
-    questions = [
-        f"示例问题 {i+1}（难度: {data.difficulty}）"
-        for i in range(data.count)
-    ]
-    
-    # 更新问题池
-    update_data = InterviewSessionUpdate(question_pool=questions)
-    session = await interview_crud.update(
-        db, db_obj=session, obj_in=update_data
-    )
-    
-    return success_response(
-        data={"questions": questions},
-        message="问题生成成功"
-    )
 
 
 @router.post("/{session_id}/sync", summary="同步对话记录", response_model=DictResponse)
@@ -196,9 +176,10 @@ async def complete_session(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    完成面试会话并生成报告
+    标记面试会话为已完成
     
-    注意: 实际报告生成逻辑需要在 services 层实现
+    注意: 此接口仅标记会话状态，不生成报告。
+    报告生成请使用 /api/v1/ai/interview/report 接口。
     """
     session = await interview_crud.get(db, session_id)
     if not session:
@@ -210,15 +191,8 @@ async def complete_session(
     if not session.messages:
         raise BadRequestException("没有问答消息，无法完成会话")
     
-    update_data = InterviewSessionUpdate(
-        is_completed=True,
-        report={"summary": "面试报告占位"},
-        report_markdown="# 面试报告\n\n待 AI 服务生成..."
-    )
-    
-    session = await interview_crud.update(
-        db, db_obj=session, obj_in=update_data
-    )
+    update_data = InterviewSessionUpdate(is_completed=True)
+    session = await interview_crud.update(db, db_obj=session, obj_in=update_data)
     
     response = InterviewSessionResponse.model_validate(session)
     response.messages = [QAMessage(**m) for m in (session.messages or [])]

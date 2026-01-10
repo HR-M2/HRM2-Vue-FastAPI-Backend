@@ -6,6 +6,7 @@ AI Agents 模块
 - ScreeningAgentManager: 多代理简历筛选
 - InterviewService: 智能面试辅助
 - AnalysisService: 综合评估分析
+- ExperienceManager: 经验学习与检索
 - DevToolsService: 开发测试工具
 """
 
@@ -15,6 +16,7 @@ from .analysis import AnalysisService, get_analysis_service
 from .interview import InterviewService, get_interview_service
 from .position import PositionService, get_position_service
 from .screening import ScreeningAgentManager, create_screening_agents
+from .experience_manager import ExperienceManager, get_experience_manager
 
 __all__ = [
     "get_llm_client",
@@ -30,4 +32,7 @@ __all__ = [
     "get_position_service",
     "ScreeningAgentManager",
     "create_screening_agents",
+    "ExperienceManager",
+    "get_experience_manager",
 ]
+

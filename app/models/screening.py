@@ -1,12 +1,13 @@
 """
 简历筛选任务模型模块 - SQLModel 版本
 """
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, List, TYPE_CHECKING
 from enum import Enum
 from sqlmodel import SQLModel, Field, Relationship, Column, JSON, UniqueConstraint
 from sqlalchemy import Column as SAColumn, String, ForeignKey
 
 from .base import SQLModelBase, TimestampMixin, IDMixin, TimestampResponse
+from .experience import AppliedExperienceItem
 
 if TYPE_CHECKING:
     from .application import Application
@@ -56,6 +57,13 @@ class ScreeningTask(TimestampMixin, IDMixin, SQLModel, table=True):
     recommendation: Optional[str] = Field(None, max_length=20, description="推荐结果")
     report_content: Optional[str] = Field(None, description="报告内容(Markdown)")
     
+    # RAG 经验引用记录（用于追溯 AI 决策依据）
+    applied_experience_ids: Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSON),
+        description="本次筛选引用的经验 ID 列表"
+    )
+    
     # 关联关系
     application: Optional["Application"] = Relationship(back_populates="screening_task")
     
@@ -79,6 +87,7 @@ class ScreeningResultUpdate(SQLModelBase):
     recommendation: Optional[str] = Field(None, description="推荐结果")
     report_content: Optional[str] = Field(None, description="报告内容")
     error_message: Optional[str] = Field(None, description="错误信息")
+    applied_experience_ids: Optional[List[str]] = Field(None, description="引用的经验 ID 列表")
 
 
 # ==================== 响应 Schema ====================
@@ -93,8 +102,12 @@ class ScreeningTaskResponse(TimestampResponse):
     recommendation: Optional[str]
     report_content: Optional[str]
     error_message: Optional[str]
+    applied_experience_ids: Optional[List[str]] = None
     
     # 关联信息
     candidate_name: Optional[str] = None
     position_title: Optional[str] = None
     resume_content: Optional[str] = None
+    
+    # 引用的经验详情（由 API 填充）
+    applied_experiences: Optional[List[AppliedExperienceItem]] = None

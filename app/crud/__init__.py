@@ -11,6 +11,7 @@ from .screening import screening_crud
 from .video import video_crud
 from .interview import interview_crud
 from .analysis import analysis_crud
+from .experience import experience_crud
 
 __all__ = [
     "CRUDBase",
@@ -21,4 +22,6 @@ __all__ = [
     "video_crud",
     "interview_crud",
     "analysis_crud",
+    "experience_crud",
 ]
+

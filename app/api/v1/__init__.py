@@ -1,7 +1,7 @@
 """
 API v1 路由模块
 """
-from . import positions, resumes, applications, screening, video, interview, analysis
+from . import positions, resumes, applications, screening, video, interview, analysis, feedback
 
 __all__ = [
     "positions",
@@ -11,4 +11,6 @@ __all__ = [
     "video",
     "interview",
     "analysis",
+    "feedback",
 ]
+
