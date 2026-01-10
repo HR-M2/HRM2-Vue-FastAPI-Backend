@@ -34,13 +34,6 @@ class MessagesSyncRequest(SQLModelBase):
     messages: List[QAMessageCreate] = Field(..., description="完整对话记录")
 
 
-class GenerateQuestionsRequest(SQLModelBase):
-    """生成问题请求"""
-    count: int = Field(5, ge=1, le=20, description="生成问题数量")
-    difficulty: str = Field("medium", description="难度: easy/medium/hard")
-    focus_areas: Optional[List[str]] = Field(None, description="关注领域")
-
-
 # ==================== 表模型 ====================
 
 class InterviewSession(TimestampMixin, IDMixin, SQLModel, table=True):

@@ -13,7 +13,7 @@ from .application import (
 )
 from .screening import ScreeningTask, ScreeningTaskCreate, ScreeningResultUpdate, ScreeningTaskResponse, TaskStatus, ScreeningScore
 from .video import VideoAnalysis, VideoAnalysisCreate, VideoResultUpdate, VideoAnalysisResponse, BigFiveScores
-from .interview import InterviewSession, InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, QAMessage, QAMessageCreate, MessagesSyncRequest, GenerateQuestionsRequest
+from .interview import InterviewSession, InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, QAMessage, QAMessageCreate, MessagesSyncRequest
 from .analysis import ComprehensiveAnalysis, ComprehensiveAnalysisCreate, ComprehensiveAnalysisUpdate, ComprehensiveAnalysisResponse, RecommendationLevel, DimensionScoreItem
 from .experience import AgentExperience, AgentExperienceCreate, AgentExperienceResponse, ExperienceCategory, FeedbackRequest, FeedbackResponse, AppliedExperienceItem, ExperienceListData
 
@@ -65,7 +65,6 @@ __all__ = [
     "QAMessage",
     "QAMessageCreate",
     "MessagesSyncRequest",
-    "GenerateQuestionsRequest",
     # Analysis
     "ComprehensiveAnalysis",
     "ComprehensiveAnalysisCreate",
