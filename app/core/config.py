@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     embedding_api_key: str = ""
     embedding_base_url: str = ""
     
+    # Reranker 配置
+    reranker_model: str = ""
+    reranker_api_key: str = ""
+    reranker_base_url: str = ""
+    
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):

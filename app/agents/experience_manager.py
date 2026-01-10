@@ -11,6 +11,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.embedding import get_embedding_client, cosine_similarity
+from app.core.reranker import get_reranker_client
 from app.crud import experience_crud
 from app.models import AgentExperience, AgentExperienceCreate
 
@@ -28,6 +29,7 @@ class ExperienceManager:
     def __init__(self):
         self._llm = get_llm_client()
         self._embedding = get_embedding_client()
+        self._reranker = get_reranker_client()
     
     async def learn(
         self,
@@ -80,26 +82,26 @@ class ExperienceManager:
         category: str,
         context: str,
         top_k: int = 5,
-        threshold: float = 0.7,
+        threshold: float = 0.2,
     ) -> List[AgentExperience]:
         """
-        语义检索相关经验（带相似度阈值过滤）
+        两阶段语义检索相关经验（Embedding粗召回 + Reranker精排）
         
         流程：
         1. 对当前上下文生成 Embedding
-        2. 在同类别经验中按余弦相似度排序
-        3. 过滤低于阈值的经验，避免噪声干扰
-        4. 返回 Top-K 最相关经验
+        2. 在同类别经验中按余弦相似度粗召回 top_k*2 条
+        3. 使用 Reranker 对候选经验精排
+        4. 过滤低于阈值的经验，返回 Top-K
         
         Args:
             db: 数据库会话
             category: 经验类别
             context: 当前上下文
             top_k: 返回数量
-            threshold: 相似度阈值，低于此值的经验将被过滤（默认 0.7）
+            threshold: Reranker 相关性阈值（默认 0.2）
             
         Returns:
-            相关经验列表（按相似度降序，仅包含高于阈值的经验）
+            相关经验列表（按相关性降序，仅包含高于阈值的经验）
         """
         # 获取该类别的所有经验
         all_experiences = await experience_crud.get_all_by_category(db, category)
@@ -116,31 +118,75 @@ class ExperienceManager:
             logger.warning("无法生成上下文向量，跳过经验检索")
             return []
         
-        # 计算相似度并过滤低于阈值的经验
+        # === 阶段1: Embedding 粗召回 ===
         scored_experiences = []
         for exp in all_experiences:
             if exp.embedding:
                 similarity = cosine_similarity(context_embedding, exp.embedding)
-                # 仅保留高于阈值的经验，避免不相关经验干扰 LLM 判断
-                if similarity >= threshold:
-                    scored_experiences.append((similarity, exp))
-                else:
-                    logger.debug(
-                        "经验 {} 相似度 {:.3f} 低于阈值 {:.2f}，已过滤",
-                        exp.id, similarity, threshold
-                    )
+                scored_experiences.append((similarity, exp))
         
-        # 按相似度降序排序
+        # 按相似度降序排序，取 top_k*2 作为候选
         scored_experiences.sort(key=lambda x: x[0], reverse=True)
+        candidates = scored_experiences[:top_k * 2]
         
-        # 返回 Top-K
-        result = [exp for _, exp in scored_experiences[:top_k]]
+        if not candidates:
+            logger.debug("类别 {} 无有效候选经验", category)
+            return []
+        
+        # === 阶段2: Reranker 精排 ===
+        if self._reranker.is_configured() and len(candidates) > 1:
+            try:
+                # 构建文档列表用于重排序
+                documents = [
+                    f"{exp.context_summary}\n{exp.learned_rule}" 
+                    for _, exp in candidates
+                ]
+                
+                rerank_results = await self._reranker.rerank(
+                    query=context,
+                    documents=documents,
+                    top_n=top_k
+                )
+                
+                # 根据 Reranker 结果过滤并排序
+                results = []
+                for r in rerank_results:
+                    if r.get("relevance_score", 0) >= threshold:
+                        idx = r.get("index", 0)
+                        if idx < len(candidates):
+                            results.append(candidates[idx][1])
+                            logger.debug(
+                                "经验 {} Reranker 分数 {:.3f} 通过阈值 {:.2f}",
+                                candidates[idx][1].id, r["relevance_score"], threshold
+                            )
+                    else:
+                        logger.debug(
+                            "经验 Reranker 分数 {:.3f} 低于阈值 {:.2f}，已过滤",
+                            r.get("relevance_score", 0), threshold
+                        )
+                
+                logger.debug(
+                    "检索到 {} 条相关经验 (category={}, reranker=True)",
+                    len(results), category
+                )
+                return results
+                
+            except Exception as e:
+                logger.warning("Reranker 调用失败，降级为 Embedding 结果: {}", e)
+        
+        # === 降级: 仅使用 Embedding 结果 ===
+        # 使用较高阈值 0.7 过滤（Embedding 相似度范围不同）
+        embedding_threshold = 0.7
+        results = [
+            exp for sim, exp in candidates[:top_k] 
+            if sim >= embedding_threshold
+        ]
+        
         logger.debug(
-            "检索到 {} 条相关经验 (category={}, threshold={:.2f})",
-            len(result), category, threshold
+            "检索到 {} 条相关经验 (category={}, reranker=False)",
+            len(results), category
         )
-        
-        return result
+        return results
     
     def format_experiences_for_prompt(
         self,

@@ -4,7 +4,7 @@ RAG 经验库集成测试
 测试范围：
 1. Experience CRUD API（创建、查询、删除经验）
 2. 反馈学习流程（提交反馈 → 学习经验 → 存入数据库）
-3. RAG 检索逻辑（向量检索 + Prompt 格式化）
+3. RAG 检索逻辑（Embedding粗召回 + Reranker精排 + Prompt 格式化）
 """
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -23,6 +23,21 @@ def mock_embedding():
     ) as mock:
         mock.return_value = [0.1] * 1536  # 返回固定的 1536 维向量
         yield mock
+
+
+@pytest.fixture
+def mock_reranker():
+    """Mock Reranker API，避免调用 SiliconFlow"""
+    with patch(
+        "app.agents.experience_manager.get_reranker_client"
+    ) as mock:
+        mock_client = MagicMock()
+        mock_client.is_configured.return_value = True
+        mock_client.rerank = AsyncMock(return_value=[
+            {"index": 0, "relevance_score": 0.95, "document": "doc1"},
+        ])
+        mock.return_value = mock_client
+        yield mock_client
 
 
 @pytest.mark.asyncio
@@ -95,8 +110,8 @@ async def test_feedback_submission_flow(client: AsyncClient, factory, mock_embed
 
 
 @pytest.mark.asyncio
-async def test_rag_retrieval_and_formatting(mock_embedding):
-    """测试 RAG 检索与 Prompt 格式化"""
+async def test_rag_retrieval_and_formatting(mock_embedding, mock_reranker):
+    """测试 RAG 检索与 Prompt 格式化（两阶段：Embedding粗召回 + Reranker精排）"""
     
     manager = ExperienceManager()
     
@@ -120,6 +135,11 @@ async def test_rag_retrieval_and_formatting(mock_embedding):
         )
     ]
     
+    # 配置 Reranker mock 返回第一个经验
+    mock_reranker.rerank.return_value = [
+        {"index": 0, "relevance_score": 0.95, "document": "doc1"},
+    ]
+    
     with patch(
         "app.agents.experience_manager.experience_crud.get_all_by_category",
         new_callable=AsyncMock
@@ -134,7 +154,7 @@ async def test_rag_retrieval_and_formatting(mock_embedding):
             context="Python 后端开发岗位"
         )
         
-        # 验证检索结果：向量相似度高的排在前面
+        # 验证检索结果：Reranker 精排后返回相关经验
         assert len(results) >= 1
         assert results[0].learned_rule == "优先考察并发编程能力"
         
