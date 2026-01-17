@@ -126,6 +126,25 @@ async def create_application(
     )
 
 
+@router.get("/stats/overview", summary="获取申请统计概览", response_model=DictResponse)
+async def get_stats_overview(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取申请统计概览
+    """
+    total = await application_crud.count(db)
+    screened = await screening_crud.count_by_status(db, "completed")
+    interviewed = await interview_crud.count_completed(db)
+    recommended = await analysis_crud.count(db)
+    return success_response(data={
+        "total": total,
+        "screened": screened,
+        "interviewed": interviewed,
+        "recommended": recommended
+    })
+
+
 @router.get("/{application_id}", summary="获取应聘申请详情", response_model=ResponseModel[ApplicationDetailResponse])
 async def get_application(
     application_id: str,
@@ -187,22 +206,3 @@ async def delete_application(
     
     await application_crud.soft_delete(db, id=application_id)
     return success_response(message="应聘申请删除成功")
-
-
-@router.get("/stats/overview", summary="获取申请统计概览", response_model=DictResponse)
-async def get_stats_overview(
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    获取申请统计概览
-    """
-    total = await application_crud.count(db)
-    screened = await screening_crud.count_by_status(db, "completed")
-    interviewed = await interview_crud.count_completed(db)
-    recommended = await analysis_crud.count(db)
-    return success_response(data={
-        "total": total,
-        "screened": screened,
-        "interviewed": interviewed,
-        "recommended": recommended
-    })

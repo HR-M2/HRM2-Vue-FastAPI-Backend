@@ -14,7 +14,7 @@ from .config import settings
 # 创建异步引擎
 engine = create_async_engine(
     settings.database_url,
-    echo=settings.debug,  # 开发环境打印 SQL
+    echo=False,  # 关闭 SQL 日志输出
     future=True,
 )
 

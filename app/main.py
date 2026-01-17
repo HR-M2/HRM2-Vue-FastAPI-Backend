@@ -9,6 +9,7 @@ from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from loguru import logger
+import logging
 
 from app.core.config import settings
 from app.core.database import init_db, close_db
@@ -42,6 +43,11 @@ async def lifespan(app: FastAPI):
     logger.info(f"启动应用: {settings.app_name}")
     logger.info(f"环境: {settings.app_env}")
     logger.info(f"调试模式: {settings.debug}")
+    
+    # 关闭 SQLAlchemy 的 SQL 查询日志
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+    logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
+    logger.info("已关闭 SQLAlchemy SQL 查询日志")
     
     # 初始化数据库
     await init_db()
