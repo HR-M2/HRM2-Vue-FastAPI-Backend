@@ -7,6 +7,7 @@ from .application import application_crud
 from .screening import screening_crud
 from .video import video_crud
 from .interview import interview_crud
+from .immersive import immersive_crud
 from .analysis import analysis_crud
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "screening_crud",
     "video_crud",
     "interview_crud",
+    "immersive_crud",
     "analysis_crud",
 ]

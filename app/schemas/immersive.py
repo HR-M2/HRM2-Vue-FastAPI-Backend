@@ -8,14 +8,48 @@ from pydantic import Field
 from .base import BaseSchema, TimestampSchema
 
 
+class BigFivePersonality(BaseSchema):
+    """大五人格分析"""
+    
+    openness: float = Field(..., ge=0, le=1, description="开放性")
+    conscientiousness: float = Field(..., ge=0, le=1, description="尽责性")
+    extraversion: float = Field(..., ge=0, le=1, description="外向性")
+    agreeableness: float = Field(..., ge=0, le=1, description="宜人性")
+    neuroticism: float = Field(..., ge=0, le=1, description="神经质")
+
+
+class DepressionRisk(BaseSchema):
+    """抑郁风险评估"""
+    
+    score: float = Field(..., ge=0, le=100, description="抑郁可能性评分")
+    level: Literal["low", "medium", "high"] = Field(..., description="风险等级")
+    confidence: float = Field(..., ge=0, le=1, description="分析置信度")
+
+
+class SpeechFeatures(BaseSchema):
+    """语音特征分析"""
+    
+    pace: Literal["slow", "normal", "fast"] = Field("normal", description="语速")
+    volume: float = Field(0, ge=0, le=1, description="音量")
+    pitch_variance: float = Field(0, ge=0, le=1, description="音调变化")
+    pause_frequency: float = Field(0, ge=0, le=1, description="停顿频率")
+    clarity: float = Field(0, ge=0, le=1, description="清晰度")
+
+
 class SpeakerSegment(BaseSchema):
     """说话人片段"""
     
     speaker: Literal["interviewer", "candidate"] = Field(..., description="说话人")
     start_time: float = Field(..., description="开始时间（秒）")
     end_time: float = Field(..., description="结束时间（秒）")
+    duration: float = Field(0, description="时长（秒）")
     text: str = Field("", description="转录文本")
     confidence: float = Field(0.0, ge=0, le=1, description="置信度")
+    
+    # 心理分析数据（仅候选人）
+    big_five_personality: Optional[BigFivePersonality] = Field(None, description="大五人格分析")
+    depression_risk: Optional[DepressionRisk] = Field(None, description="抑郁风险评估")
+    speech_features: Optional[SpeechFeatures] = Field(None, description="语音特征分析")
 
 
 class EmotionState(BaseSchema):
@@ -31,6 +65,7 @@ class CandidateState(BaseSchema):
     """候选人状态分析"""
     
     timestamp: datetime = Field(default_factory=datetime.now, description="时间戳")
+    segment_id: Optional[str] = Field(None, description="关联的说话人分段ID")
     emotion: EmotionState = Field(..., description="情绪状态")
     engagement: float = Field(0, ge=0, le=1, description="参与度")
     nervousness: float = Field(0, ge=0, le=1, description="紧张程度")
@@ -39,6 +74,10 @@ class CandidateState(BaseSchema):
     posture_score: float = Field(0, ge=0, le=1, description="姿态评分")
     speech_clarity: float = Field(0, ge=0, le=1, description="语言清晰度")
     speech_pace: Literal["slow", "normal", "fast"] = Field("normal", description="语速")
+    
+    # 累积心理分析
+    cumulative_big_five: Optional[BigFivePersonality] = Field(None, description="累积大五人格")
+    cumulative_depression_risk: Optional[Dict] = Field(None, description="累积抑郁风险")
 
 
 class ImmersiveSessionCreate(BaseSchema):
@@ -144,3 +183,88 @@ class InterviewInsight(BaseSchema):
     content: str = Field(..., description="洞察内容")
     severity: Literal["info", "warning", "alert"] = Field("info", description="严重程度")
     timestamp: datetime = Field(default_factory=datetime.now, description="时间戳")
+
+
+# ========== 新增的 Schema ==========
+
+class TranscriptCreate(BaseSchema):
+    """创建转录记录"""
+    
+    speaker: Literal["interviewer", "candidate", "unknown"] = Field(..., description="说话人")
+    text: str = Field(..., min_length=1, description="转录文本")
+    is_final: bool = Field(False, description="是否为最终结果")
+
+
+class SpeakerSegmentCreate(BaseSchema):
+    """创建说话人分段"""
+    
+    speaker: Literal["interviewer", "candidate"] = Field(..., description="说话人")
+    start_time: float = Field(..., ge=0, description="开始时间（秒）")
+    end_time: float = Field(..., gt=0, description="结束时间（秒）")
+    text: str = Field("", description="转录文本")
+    confidence: float = Field(0.0, ge=0, le=1, description="置信度")
+    
+    # 可选的心理分析数据
+    big_five_personality: Optional[BigFivePersonality] = None
+    depression_risk: Optional[DepressionRisk] = None
+    speech_features: Optional[SpeechFeatures] = None
+
+
+class StateRecordCreate(BaseSchema):
+    """创建状态记录"""
+    
+    segment_id: Optional[str] = Field(None, description="关联的说话人分段ID")
+    emotion: EmotionState = Field(..., description="情绪状态")
+    engagement: float = Field(..., ge=0, le=1, description="参与度")
+    nervousness: float = Field(..., ge=0, le=1, description="紧张程度")
+    confidence_level: float = Field(..., ge=0, le=1, description="自信程度")
+    eye_contact: float = Field(..., ge=0, le=1, description="眼神接触度")
+    posture_score: float = Field(..., ge=0, le=1, description="姿态评分")
+    speech_clarity: float = Field(..., ge=0, le=1, description="语言清晰度")
+    speech_pace: Literal["slow", "normal", "fast"] = Field("normal", description="语速")
+
+
+class SyncDataRequest(BaseSchema):
+    """同步实时数据请求"""
+    
+    transcripts: Optional[List[TranscriptCreate]] = Field(None, description="转录数据列表")
+    speaker_segments: Optional[List[SpeakerSegmentCreate]] = Field(None, description="说话人分段列表")
+    state_records: Optional[List[StateRecordCreate]] = Field(None, description="状态记录列表")
+
+
+class SessionStatistics(BaseSchema):
+    """会话统计数据"""
+    
+    total_segments: int = Field(0, description="总分段数")
+    candidate_segments: int = Field(0, description="候选人分段数")
+    interviewer_segments: int = Field(0, description="面试官分段数")
+    candidate_speak_ratio: float = Field(0, description="候选人说话时间占比")
+    interviewer_speak_ratio: float = Field(0, description="面试官说话时间占比")
+    avg_engagement: float = Field(0, description="平均参与度")
+    avg_confidence: float = Field(0, description="平均自信程度")
+    avg_nervousness: float = Field(0, description="平均紧张程度")
+    session_quality_score: float = Field(0, description="会话质量评分")
+
+
+class PsychologicalSummary(BaseSchema):
+    """心理分析汇总"""
+    
+    final_big_five: Optional[Dict] = Field(None, description="最终大五人格评估")
+    depression_assessment: Optional[Dict] = Field(None, description="抑郁风险评估")
+    psychological_wellness_score: float = Field(0, description="综合心理健康评分")
+    trend_analysis: Optional[Dict] = Field(None, description="趋势分析")
+
+
+class ImmersiveSessionDetailResponse(ImmersiveSessionResponse):
+    """完整的沉浸式面试会话响应（含汇总数据）"""
+    
+    # 统计汇总
+    statistics: Optional[SessionStatistics] = Field(None, description="统计数据")
+    
+    # 心理分析汇总  
+    psychological_summary: Optional[PsychologicalSummary] = Field(None, description="心理分析汇总")
+    
+    # 完整数据（仅在完成后返回）
+    full_transcripts: Optional[List[RealtimeTranscript]] = Field(None, description="完整转录记录")
+    full_speaker_segments: Optional[List[SpeakerSegment]] = Field(None, description="完整说话人分段")
+    full_state_history: Optional[List[CandidateState]] = Field(None, description="完整状态历史")

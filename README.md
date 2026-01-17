@@ -112,8 +112,13 @@ uvicorn app.main:app --reload
 | **Swagger UI** | http://127.0.0.1:8000/docs | 交互式文档，可直接测试 API |
 | **ReDoc** | http://127.0.0.1:8000/redoc | 美观的只读文档 |
 | **OpenAPI JSON** | http://127.0.0.1:8000/openapi.json | OpenAPI 3.0 规范 |
+| **详细文档** | [docs/README.md](./docs/README.md) | 模块化 API 文档 |
 
 > 💡 **提示**: Swagger UI 支持在线调试，可直接在浏览器中测试所有 API 端点。
+
+### 详细模块文档
+
+- [沉浸式面试 API](./docs/api/immersive.md) - 双摄像头面试、心理分析、实时数据处理
 
 ### API 模块概览
 
@@ -125,6 +130,7 @@ uvicorn app.main:app --reload
 | 简历筛选 | `/api/v1/screening` | AI 简历智能筛选 |
 | 视频分析 | `/api/v1/video` | 视频面试分析 |
 | 面试辅助 | `/api/v1/interview` | AI 面试问题生成与记录 |
+| **沉浸式面试** | `/api/v1/immersive` | **双摄像头面试、心理分析、实时数据处理** |
 | 综合分析 | `/api/v1/analysis` | 候选人综合评估 |
 | AI 服务 | `/api/v1/ai` | AI 能力调用接口 |
 
