@@ -4,6 +4,7 @@
 提供双摄像头面试、说话人识别、实时状态分析等功能
 """
 from typing import Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +28,8 @@ from app.schemas.immersive import (
     TranscriptCreate,
     SpeakerSegmentCreate,
     StateRecordCreate,
+    GenerateQuestionsRequest,
+    QuestionSuggestionResponse,
 )
 
 router = APIRouter()
@@ -402,3 +405,142 @@ async def get_session_statistics(
         raise NotFoundException(str(e))
     except Exception as e:
         raise BadRequestException(f"获取统计数据失败: {str(e)}")
+
+
+@router.post("/{session_id}/questions", summary="生成智能问题建议", response_model=DictResponse)
+async def generate_question_suggestions(
+    session_id: str,
+    data: GenerateQuestionsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    基于心理状态和对话历史生成智能问题建议
+    
+    沉浸式面试的问题建议会考虑：
+    - 候选人当前的心理状态（紧张程度、参与度等）
+    - 对话历史和话题流向
+    - 大五人格分析结果
+    - 抑郁风险评估
+    """
+    try:
+        suggestions = await immersive_crud.generate_question_suggestions(
+            db=db,
+            session_id=session_id,
+            count=data.count,
+            difficulty=data.difficulty,
+            focus_areas=data.focus_areas,
+            use_psychological_context=data.use_psychological_context,
+            use_conversation_history=data.use_conversation_history,
+            question_type=data.question_type
+        )
+        
+        return success_response(
+            data={
+                "suggestions": suggestions,
+                "total_count": len(suggestions),
+                "generation_context": {
+                    "difficulty": data.difficulty,
+                    "question_type": data.question_type,
+                    "psychological_context_used": data.use_psychological_context,
+                    "conversation_history_used": data.use_conversation_history
+                }
+            },
+            message="问题建议生成成功"
+        )
+    except ValueError as e:
+        raise NotFoundException(str(e))
+    except Exception as e:
+        raise BadRequestException(f"生成问题建议失败: {str(e)}")
+
+
+@router.get("/{session_id}/insights", summary="获取实时面试洞察", response_model=DictResponse)
+async def get_interview_insights(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取基于心理状态的实时面试洞察和建议
+    """
+    try:
+        session = await immersive_crud.get(db, session_id)
+        if not session:
+            raise NotFoundException(f"沉浸式面试会话不存在: {session_id}")
+        
+        insights = []
+        alerts = []
+        suggestions = []
+        
+        # 基于心理状态生成洞察
+        if session.state_history:
+            latest_state = session.get_latest_psychological_state()
+            if latest_state:
+                # 分析参与度
+                engagement = latest_state.get("engagement", 0)
+                if engagement > 0.8:
+                    insights.append({
+                        "category": "参与度",
+                        "content": "候选人参与度很高，表现出强烈的兴趣",
+                        "severity": "info",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                elif engagement < 0.5:
+                    alerts.append({
+                        "category": "参与度",
+                        "content": "候选人参与度较低，建议调整话题或提问方式",
+                        "severity": "warning",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    suggestions.append("尝试询问候选人感兴趣的技术领域")
+                
+                # 分析紧张程度
+                nervousness = latest_state.get("nervousness", 0)
+                if nervousness > 0.7:
+                    alerts.append({
+                        "category": "情绪状态",
+                        "content": "候选人紧张程度较高，建议营造轻松氛围",
+                        "severity": "warning",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    suggestions.append("可以先聊一些轻松的话题，让候选人放松")
+                
+                # 分析自信程度
+                confidence = latest_state.get("confidence_level", 0)
+                if confidence > 0.8:
+                    insights.append({
+                        "category": "自信程度",
+                        "content": "候选人表现出很强的自信心",
+                        "severity": "info",
+                        "timestamp": datetime.now().isoformat()
+                    })
+        
+        # 分析说话比例
+        if session.candidate_speak_ratio > 0.7:
+            insights.append({
+                "category": "对话平衡",
+                "content": "候选人表达欲望强烈，善于沟通",
+                "severity": "info",
+                "timestamp": datetime.now().isoformat()
+            })
+        elif session.candidate_speak_ratio < 0.3:
+            alerts.append({
+                "category": "对话平衡",
+                "content": "候选人说话较少，建议引导其多表达",
+                "severity": "warning",
+                "timestamp": datetime.now().isoformat()
+            })
+            suggestions.append("尝试问一些开放性问题，鼓励候选人多分享")
+        
+        return success_response(
+            data={
+                "insights": insights,
+                "alerts": alerts,
+                "suggestions": suggestions,
+                "session_quality_score": session.session_quality_score,
+                "psychological_wellness_score": session.psychological_wellness_score
+            },
+            message="面试洞察获取成功"
+        )
+    except ValueError as e:
+        raise NotFoundException(str(e))
+    except Exception as e:
+        raise BadRequestException(f"获取面试洞察失败: {str(e)}")

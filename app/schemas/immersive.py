@@ -268,3 +268,30 @@ class ImmersiveSessionDetailResponse(ImmersiveSessionResponse):
     full_transcripts: Optional[List[RealtimeTranscript]] = Field(None, description="完整转录记录")
     full_speaker_segments: Optional[List[SpeakerSegment]] = Field(None, description="完整说话人分段")
     full_state_history: Optional[List[CandidateState]] = Field(None, description="完整状态历史")
+
+
+class GenerateQuestionsRequest(BaseSchema):
+    """生成面试问题请求（沉浸式面试版）"""
+    
+    count: int = Field(5, ge=1, le=20, description="生成问题数量")
+    difficulty: Literal["easy", "medium", "hard"] = Field("medium", description="问题难度")
+    focus_areas: Optional[List[str]] = Field(None, description="关注领域")
+    
+    # 沉浸式面试特有参数
+    use_psychological_context: bool = Field(True, description="是否使用心理分析上下文")
+    use_conversation_history: bool = Field(True, description="是否使用对话历史")
+    question_type: Literal["technical", "behavioral", "situational", "mixed"] = Field("mixed", description="问题类型")
+
+
+class QuestionSuggestionResponse(BaseSchema):
+    """问题建议响应"""
+    
+    question: str = Field(..., description="建议问题")
+    type: Literal["followup", "probe", "behavioral", "technical", "psychological"] = Field(..., description="问题类型")
+    priority: int = Field(1, ge=1, le=10, description="优先级")
+    reason: str = Field(..., description="建议原因")
+    
+    # 沉浸式面试特有字段
+    psychological_context: Optional[str] = Field(None, description="心理状态上下文")
+    timing_suggestion: Optional[str] = Field(None, description="提问时机建议")
+    expected_response_indicators: Optional[List[str]] = Field(None, description="预期回答指标")

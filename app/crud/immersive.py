@@ -1,6 +1,7 @@
 """
 沉浸式面试会话 CRUD 操作
 """
+import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy import select, func, and_
@@ -19,6 +20,8 @@ from app.schemas.immersive import (
     SyncDataRequest
 )
 from .base import CRUDBase
+
+logger = logging.getLogger(__name__)
 
 
 class CRUDImmersive(CRUDBase[ImmersiveSession]):
@@ -435,6 +438,70 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
             "speaker_segments": session.speaker_segments or [],
             "state_history": session.state_history or []
         }
+    
+    # ========== 问题建议方法 ==========
+    
+    async def generate_question_suggestions(
+        self,
+        db: AsyncSession,
+        session_id: str,
+        count: int = 5,
+        difficulty: str = "medium",
+        focus_areas: Optional[List[str]] = None,
+        use_psychological_context: bool = True,
+        use_conversation_history: bool = True,
+        question_type: str = "mixed"
+    ) -> List[Dict[str, Any]]:
+        """生成智能问题建议（调用AI服务）"""
+        from app.services.agents.immersive_interview_agent import get_immersive_interview_agent
+        
+        session = await self.get_with_application(db, session_id)
+        if not session:
+            raise ValueError(f"会话不存在: {session_id}")
+        
+        # 获取AI服务实例
+        ai_agent = get_immersive_interview_agent()
+        
+        # 构建会话数据
+        session_data = {
+            "application": {
+                "resume": {
+                    "candidate_name": session.application.resume.candidate_name if session.application and session.application.resume else None,
+                    "content": session.application.resume.content if session.application and session.application.resume else ""
+                },
+                "position": {
+                    "title": session.application.position.title if session.application and session.application.position else None,
+                    "required_skills": session.application.position.required_skills if session.application and session.application.position else [],
+                    "description": session.application.position.description if session.application and session.application.position else ""
+                }
+            } if session.application else {},
+            "transcripts": session.transcripts or [],
+            "state_history": session.state_history or []
+        }
+        
+        # 构建上下文
+        context = ai_agent.build_question_context(
+            session_data, use_psychological_context, use_conversation_history
+        )
+        
+        # 调用AI服务生成问题
+        suggestions = await ai_agent.generate_question_suggestions(
+            context, count, difficulty, focus_areas, question_type
+        )
+        
+        return suggestions
+    
+    def _build_question_context(
+        self, 
+        session: ImmersiveSession, 
+        use_psychological_context: bool,
+        use_conversation_history: bool
+    ) -> Dict[str, Any]:
+        """构建问题生成的上下文信息（已废弃，迁移到AI服务层）"""
+        # 这个方法已经迁移到 app.services.agents.immersive_interview_agent
+        # 保留此方法是为了向后兼容，实际逻辑已移到AI服务层
+        logger.warning("_build_question_context 方法已废弃，请使用 AI 服务层的方法")
+        return {}
 
 
 # 创建 CRUD 实例

@@ -23,6 +23,9 @@ from .agents import (
     # 面试助手Agent
     InterviewAssistAgent,
     get_interview_assist_agent,
+    # 沉浸式面试AI助手
+    ImmersiveInterviewAgent,
+    get_immersive_interview_agent,
     # 开发测试工具
     DevToolsService,
     get_dev_tools_service,

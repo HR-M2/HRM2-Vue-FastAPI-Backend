@@ -351,7 +351,113 @@ POST /api/v1/immersive/{session_id}/state
 }
 ```
 
-### 4. 统计查询
+### 4. 智能问题建议 ⭐
+
+#### 4.1 生成问题建议
+```http
+POST /api/v1/immersive/{session_id}/questions
+```
+
+**特色功能**: 基于心理状态和对话历史的智能问题建议（已集成真实AI服务）
+
+**AI集成状态**: ✅ 已完成
+- 使用项目统一的LLM客户端
+- 支持AI服务失败时的备用方案
+- 基于心理状态和对话历史的智能分析
+
+**请求体**:
+```json
+{
+  "count": 5,
+  "difficulty": "medium",
+  "focus_areas": ["技术能力", "团队协作"],
+  "use_psychological_context": true,
+  "use_conversation_history": true,
+  "question_type": "mixed"
+}
+```
+
+**参数说明**:
+- `count`: 生成问题数量 (1-20)
+- `difficulty`: 问题难度 (easy/medium/hard)
+- `focus_areas`: 关注领域 (可选)
+- `use_psychological_context`: 是否使用心理分析上下文
+- `use_conversation_history`: 是否使用对话历史
+- `question_type`: 问题类型 (technical/behavioral/situational/mixed)
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "问题建议生成成功",
+  "data": {
+    "suggestions": [
+      {
+        "question": "我注意到你现在看起来很自信，能详细说说你刚才提到的技术实现吗？",
+        "type": "technical",
+        "priority": 5,
+        "reason": "基于候选人当前自信状态，适合深入技术问题",
+        "psychological_context": "当前情绪: confident, 参与度: 0.85, 紧张程度: 0.20, 自信程度: 0.80",
+        "timing_suggestion": "适合在当前话题结束后提问",
+        "expected_response_indicators": [
+          "技术深度",
+          "表达清晰度",
+          "情绪稳定性",
+          "自信程度"
+        ]
+      }
+    ],
+    "total_count": 5,
+    "generation_context": {
+      "difficulty": "medium",
+      "question_type": "mixed",
+      "psychological_context_used": true,
+      "conversation_history_used": true
+    }
+  }
+}
+```
+
+#### 4.2 获取实时洞察
+```http
+GET /api/v1/immersive/{session_id}/insights
+```
+
+**功能**: 基于心理状态的实时面试洞察和建议
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "面试洞察获取成功",
+  "data": {
+    "insights": [
+      {
+        "category": "参与度",
+        "content": "候选人参与度很高，表现出强烈的兴趣",
+        "severity": "info",
+        "timestamp": "2024-01-01T10:15:00Z"
+      }
+    ],
+    "alerts": [
+      {
+        "category": "情绪状态",
+        "content": "候选人紧张程度较高，建议营造轻松氛围",
+        "severity": "warning",
+        "timestamp": "2024-01-01T10:15:00Z"
+      }
+    ],
+    "suggestions": [
+      "可以先聊一些轻松的话题，让候选人放松",
+      "尝试询问候选人感兴趣的技术领域"
+    ],
+    "session_quality_score": 88.5,
+    "psychological_wellness_score": 85.2
+  }
+}
+```
+
+### 5. 统计查询
 
 #### 4.1 获取会话统计
 ```http
