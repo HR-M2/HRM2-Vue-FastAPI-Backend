@@ -33,3 +33,8 @@ htmlcov/
 
 # Alembic
 alembic/versions/*.pyc
+data/hrm2.db
+.kiro/steering/product.md
+.kiro/steering/structure.md
+.kiro/steering/tech.md
+data/hrm2.db

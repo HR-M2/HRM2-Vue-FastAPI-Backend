@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .screening import ScreeningTask
     from .video import VideoAnalysis
     from .interview import InterviewSession
+    from .immersive import ImmersiveSession
     from .analysis import ComprehensiveAnalysis
 
 
@@ -29,6 +30,7 @@ class Application(BaseModel):
     - 1:1 -> ScreeningTask (筛选任务)
     - 1:1 -> VideoAnalysis (视频分析)
     - 1:1 -> InterviewSession (面试会话)
+    - 1:1 -> ImmersiveSession (沉浸式面试会话)
     - 1:1 -> ComprehensiveAnalysis (综合分析)
     """
     __tablename__ = "applications"
@@ -90,6 +92,13 @@ class Application(BaseModel):
     )
     interview_session: Mapped[Optional["InterviewSession"]] = relationship(
         "InterviewSession",
+        back_populates="application",
+        uselist=False,
+        lazy="selectin",
+        cascade="all, delete-orphan"
+    )
+    immersive_session: Mapped[Optional["ImmersiveSession"]] = relationship(
+        "ImmersiveSession",
         back_populates="application",
         uselist=False,
         lazy="selectin",

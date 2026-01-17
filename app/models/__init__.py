@@ -20,6 +20,8 @@
         |
         +-- 1:N --> InterviewSession (面试会话)
         |
+        +-- 1:N --> ImmersiveSession (沉浸式面试会话)
+        |
         +-- 1:N --> ComprehensiveAnalysis (综合分析)
 """
 from .base import BaseModel, TimestampMixin
@@ -29,6 +31,7 @@ from .application import Application
 from .screening import ScreeningTask
 from .video import VideoAnalysis
 from .interview import InterviewSession
+from .immersive import ImmersiveSession
 from .analysis import ComprehensiveAnalysis
 
 __all__ = [
@@ -40,5 +43,6 @@ __all__ = [
     "ScreeningTask",
     "VideoAnalysis",
     "InterviewSession",
+    "ImmersiveSession",
     "ComprehensiveAnalysis",
 ]

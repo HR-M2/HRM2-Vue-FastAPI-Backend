@@ -1,22 +1,22 @@
-# FastAPI æ ¸å¿ƒ
+# FastAPI ºËÐÄ
 fastapi>=0.115.6
 uvicorn[standard]>=0.34.0
 pydantic>=2.10.3
 pydantic-settings>=2.7.0
 
-# æ•°æ®åº“
+# Êý¾Ý¿â
 sqlalchemy>=2.0.36
 alembic>=1.14.0
 aiosqlite>=0.20.0
 
-# å¼‚æ­¥æ”¯æŒ
+# Òì²½Ö§³Ö
 httpx>=0.28.1
 python-multipart>=0.0.19
 
-# å·¥å…·
+# ¹¤¾ß
 python-dotenv>=1.0.1
 loguru>=0.7.3
 
-# AI/LLM (å¯é€‰)
+# AI/LLM (¿ÉÑ¡)
 openai>=1.58.1
 pyautogen>=0.2.38
