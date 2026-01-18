@@ -54,10 +54,41 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
         db: AsyncSession,
         application_id: str
     ) -> Optional[ImmersiveSession]:
-        """获取某申请的沉浸式面试会话（1:1关系）"""
+        """获取某申请的沉浸式面试会话（如有多条返回最新一条）"""
         result = await db.execute(
             select(self.model)
+            .options(
+                selectinload(self.model.application)
+                .selectinload(Application.position),
+                selectinload(self.model.application)
+                .selectinload(Application.resume),
+            )
             .where(self.model.application_id == application_id)
+            .order_by(self.model.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_completed_by_application(
+        self,
+        db: AsyncSession,
+        application_id: str
+    ) -> Optional[ImmersiveSession]:
+        """获取某申请已完成的沉浸式面试会话（如有多条返回最新一条，用于综合分析）"""
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.application)
+                .selectinload(Application.position),
+                selectinload(self.model.application)
+                .selectinload(Application.resume),
+            )
+            .where(
+                self.model.application_id == application_id,
+                self.model.is_completed == True
+            )
+            .order_by(self.model.created_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
     
@@ -69,8 +100,13 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
         skip: int = 0,
         limit: int = 100
     ) -> List[ImmersiveSession]:
-        """按状态筛选会话"""
-        query = select(self.model)
+        """按状态筛选会话（预加载关联关系）"""
+        query = select(self.model).options(
+            selectinload(self.model.application)
+            .selectinload(Application.position),
+            selectinload(self.model.application)
+            .selectinload(Application.resume),
+        )
         
         conditions = []
         if is_recording is not None:

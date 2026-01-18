@@ -70,14 +70,34 @@ async def get_immersive_sessions(
     
     items = []
     for s in sessions:
-        item = ImmersiveSessionResponse.model_validate(s)
-        # 添加关联信息
+        # 手动构建响应字典，避免 model_validate 触发懒加载
+        item = {
+            "id": s.id,
+            "application_id": s.application_id,
+            "local_camera_enabled": s.local_camera_enabled,
+            "stream_url": s.stream_url,
+            "config": s.config or {},
+            "is_recording": s.is_recording,
+            "is_completed": s.is_completed,
+            "transcripts": s.transcripts or [],
+            "speaker_segments": s.speaker_segments or [],
+            "state_history": s.state_history or [],
+            "duration_seconds": s.duration_seconds or 0,
+            "interviewer_speak_ratio": s.interviewer_speak_ratio or 0,
+            "candidate_speak_ratio": s.candidate_speak_ratio or 0,
+            "final_analysis": s.final_analysis,
+            "candidate_name": None,
+            "position_title": None,
+            "created_at": s.created_at,
+            "updated_at": s.updated_at,
+        }
+        # 添加关联信息（已通过 selectinload 预加载）
         if s.application:
             if s.application.resume:
-                item.candidate_name = s.application.resume.candidate_name
+                item["candidate_name"] = s.application.resume.candidate_name
             if s.application.position:
-                item.position_title = s.application.position.title
-        items.append(item.model_dump())
+                item["position_title"] = s.application.position.title
+        items.append(item)
     
     return paged_response(items, total, page, page_size)
 
@@ -107,15 +127,30 @@ async def create_immersive_session(
     # 创建新会话
     session = await immersive_crud.create_session(db, obj_in=data)
     
-    # 构建响应
-    response = ImmersiveSessionResponse.model_validate(session)
-    if application.resume:
-        response.candidate_name = application.resume.candidate_name
-    if application.position:
-        response.position_title = application.position.title
+    # 手动构建响应，避免 model_validate 触发懒加载
+    response = {
+        "id": session.id,
+        "application_id": session.application_id,
+        "local_camera_enabled": session.local_camera_enabled,
+        "stream_url": session.stream_url,
+        "config": session.config or {},
+        "is_recording": session.is_recording,
+        "is_completed": session.is_completed,
+        "transcripts": session.transcripts or [],
+        "speaker_segments": session.speaker_segments or [],
+        "state_history": session.state_history or [],
+        "duration_seconds": session.duration_seconds or 0,
+        "interviewer_speak_ratio": session.interviewer_speak_ratio or 0,
+        "candidate_speak_ratio": session.candidate_speak_ratio or 0,
+        "final_analysis": session.final_analysis,
+        "candidate_name": application.resume.candidate_name if application.resume else None,
+        "position_title": application.position.title if application.position else None,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+    }
     
     return success_response(
-        data=response.model_dump(),
+        data=response,
         message="沉浸式面试会话创建成功"
     )
 
@@ -134,35 +169,49 @@ async def get_immersive_session(
     if not session:
         raise NotFoundException(f"沉浸式面试会话不存在: {session_id}")
     
+    # 基础响应字典
+    base_response = {
+        "id": session.id,
+        "application_id": session.application_id,
+        "local_camera_enabled": session.local_camera_enabled,
+        "stream_url": session.stream_url,
+        "config": session.config or {},
+        "is_recording": session.is_recording,
+        "is_completed": session.is_completed,
+        "transcripts": session.transcripts or [],
+        "speaker_segments": session.speaker_segments or [],
+        "state_history": session.state_history or [],
+        "duration_seconds": session.duration_seconds or 0,
+        "interviewer_speak_ratio": session.interviewer_speak_ratio or 0,
+        "candidate_speak_ratio": session.candidate_speak_ratio or 0,
+        "final_analysis": session.final_analysis,
+        "candidate_name": None,
+        "position_title": None,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+    }
+    
+    # 添加关联信息（已通过 selectinload 预加载）
+    if session.application:
+        if session.application.resume:
+            base_response["candidate_name"] = session.application.resume.candidate_name
+        if session.application.position:
+            base_response["position_title"] = session.application.position.title
+    
     # 如果会话已完成，返回完整汇总
     if session.is_completed:
-        # 获取完整汇总数据
         summary_data = await immersive_crud.get_session_summary(db, session_id)
+        base_response["statistics"] = summary_data["statistics"]
+        base_response["psychological_summary"] = summary_data["psychological_summary"]
+        base_response["full_transcripts"] = summary_data["transcripts"]
+        base_response["full_speaker_segments"] = summary_data["speaker_segments"]
+        base_response["full_state_history"] = summary_data["state_history"]
         
-        # 构建详细响应
-        response = ImmersiveSessionDetailResponse.model_validate(session)
-        response.statistics = summary_data["statistics"]
-        response.psychological_summary = summary_data["psychological_summary"]
-        response.full_transcripts = summary_data["transcripts"]
-        response.full_speaker_segments = summary_data["speaker_segments"]
-        response.full_state_history = summary_data["state_history"]
-        
-        # 添加关联信息
         if summary_data["candidate_info"]:
-            response.candidate_name = summary_data["candidate_info"].get("name")
-            response.position_title = summary_data["candidate_info"].get("position_title")
-        
-        return success_response(data=response.model_dump())
-    else:
-        # 会话未完成，返回基础信息
-        response = ImmersiveSessionResponse.model_validate(session)
-        if session.application:
-            if session.application.resume:
-                response.candidate_name = session.application.resume.candidate_name
-            if session.application.position:
-                response.position_title = session.application.position.title
-        
-        return success_response(data=response.model_dump())
+            base_response["candidate_name"] = summary_data["candidate_info"].get("name")
+            base_response["position_title"] = summary_data["candidate_info"].get("position_title")
+    
+    return success_response(data=base_response)
 
 
 @router.delete("/{session_id}", summary="删除沉浸式面试会话", response_model=MessageResponse)

@@ -15,7 +15,7 @@ from app.core.response import (
     DictResponse,
 )
 from app.core.exceptions import NotFoundException, BadRequestException
-from app.crud import analysis_crud, application_crud, screening_crud, interview_crud
+from app.crud import analysis_crud, application_crud, screening_crud, immersive_crud
 from app.models.analysis import RecommendationLevel
 from app.schemas.analysis import (
     ComprehensiveAnalysisCreate,
@@ -104,13 +104,13 @@ async def create_analysis(
             "summary": screening_task.summary,
         }
     
-    # 获取面试记录
-    interview_records = []
-    interview_report = {}
-    interview_session = await interview_crud.get_by_application(db, data.application_id)
-    if interview_session:
-        interview_records = interview_session.messages or []
-        interview_report = interview_session.report or {}
+    # 获取沉浸式面试会话数据
+    conversation_history = []
+    immersive_session = await immersive_crud.get_completed_by_application(db, data.application_id)
+    if immersive_session and immersive_session.final_analysis:
+        # 从 final_analysis 中获取 conversation_history
+        final_analysis = immersive_session.final_analysis
+        conversation_history = final_analysis.get('conversation_history', [])
     
     # 执行 AI 综合分析
     analyzer = CandidateComprehensiveAnalyzer(job_config)
@@ -118,8 +118,7 @@ async def create_analysis(
         candidate_name=candidate_name,
         resume_content=resume_content,
         screening_report=screening_report,
-        interview_records=interview_records,
-        interview_report=interview_report,
+        conversation_history=conversation_history,
     )
     
     # 映射 AI 结果到数据库字段
@@ -129,6 +128,7 @@ async def create_analysis(
     
     # 保留完整维度评分数据（包含优势、不足等详情）
     dimension_scores = ai_result.get("dimension_scores", {})
+    psychological_analysis = ai_result.get("psychological_analysis", {})
     
     analysis_result = {
         "final_score": ai_result.get("final_score", 60.0),
@@ -140,6 +140,8 @@ async def create_analysis(
         "input_snapshot": {
             "position": application.position.title if application.position else None,
             "candidate": candidate_name,
+            "psychological_analysis": psychological_analysis,
+            "immersive_session_id": immersive_session.id if immersive_session else None,
         }
     }
     

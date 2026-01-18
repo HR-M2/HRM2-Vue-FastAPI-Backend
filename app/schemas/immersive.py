@@ -55,13 +55,19 @@ class SpeakerSegment(BaseSchema):
     """说话人片段"""
     
     speaker: Literal["interviewer", "candidate"] = Field(..., description="说话人")
-    start_time: float = Field(..., description="开始时间（秒）")
-    end_time: float = Field(..., description="结束时间（秒）")
-    duration: float = Field(0, description="时长（秒）")
     text: str = Field("", description="转录文本")
+    
+    # 时间字段（兼容新旧格式）
+    start_time: Optional[float] = Field(None, description="开始时间（秒）")
+    end_time: Optional[float] = Field(None, description="结束时间（秒）")
+    timestamp: Optional[float] = Field(None, description="时间戳（秒）")
+    duration: float = Field(0, description="时长（秒）")
     confidence: float = Field(0.0, ge=0, le=1, description="置信度")
     
-    # 心理分析数据（仅候选人）
+    # 心理分析数据（新格式，简化版）
+    candidate_scores: Optional[Dict] = Field(None, description="候选人心理评分")
+    
+    # 心理分析数据（旧格式，仅候选人）
     big_five_personality: Optional[BigFivePersonality] = Field(None, description="大五人格分析")
     depression_risk: Optional[DepressionRisk] = Field(None, description="抑郁风险评估")
     speech_features: Optional[SpeechFeatures] = Field(None, description="语音特征分析")

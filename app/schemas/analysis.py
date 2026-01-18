@@ -7,6 +7,62 @@ from pydantic import Field
 from .base import BaseSchema, TimestampSchema
 
 
+# ========== 心理分析相关模型 ==========
+
+class BigFiveScores(BaseSchema):
+    """大五人格评分"""
+    openness: float = Field(0.5, ge=0, le=1, description="开放性")
+    conscientiousness: float = Field(0.5, ge=0, le=1, description="尽责性")
+    extraversion: float = Field(0.5, ge=0, le=1, description="外向性")
+    agreeableness: float = Field(0.5, ge=0, le=1, description="宜人性")
+    neuroticism: float = Field(0.5, ge=0, le=1, description="神经质")
+
+
+class BigFiveAnalysis(BaseSchema):
+    """大五人格分析结果"""
+    scores: BigFiveScores = Field(default_factory=BigFiveScores, description="各维度平均评分")
+    personality_summary: str = Field("", description="性格特点一句话概括")
+    strengths: List[str] = Field(default_factory=list, description="性格优势")
+    potential_concerns: List[str] = Field(default_factory=list, description="潜在关注点")
+    work_style: str = Field("", description="工作风格")
+    team_fit: str = Field("", description="团队协作倾向")
+    detailed_analysis: str = Field("", description="详细分析")
+
+
+class LowCredibilityResponse(BaseSchema):
+    """低可信度回答"""
+    text: str = Field("", description="回答内容")
+    deception_score: float = Field(0, description="欺骗分数")
+    confidence: float = Field(0, description="检测置信度")
+
+
+class CredibilityAnalysis(BaseSchema):
+    """可信度分析结果"""
+    overall_score: float = Field(1.0, ge=0, le=1, description="整体可信度分数")
+    level: str = Field("高可信度", description="可信度等级")
+    low_credibility_responses: List[LowCredibilityResponse] = Field(default_factory=list, description="低可信度回答")
+    high_credibility_responses: List[LowCredibilityResponse] = Field(default_factory=list, description="高可信度回答")
+    analysis: str = Field("", description="分析说明")
+
+
+class DepressionAnalysis(BaseSchema):
+    """抑郁风险分析结果"""
+    overall_score: float = Field(0, description="平均抑郁分数")
+    level: str = Field("low", description="风险等级 low/medium/high")
+    level_label: str = Field("低风险", description="风险等级标签")
+    level_distribution: Optional[Dict[str, int]] = Field(None, description="各等级分布")
+    interpretation: str = Field("", description="风险解读")
+
+
+class PsychologicalAnalysis(BaseSchema):
+    """心理分析汇总"""
+    big_five: BigFiveAnalysis = Field(default_factory=BigFiveAnalysis, description="大五人格分析")
+    credibility: CredibilityAnalysis = Field(default_factory=CredibilityAnalysis, description="可信度分析")
+    depression: DepressionAnalysis = Field(default_factory=DepressionAnalysis, description="抑郁风险分析")
+
+
+# ========== 维度评分模型 ==========
+
 class DimensionScoreItem(BaseSchema):
     """
     单个维度评分项
