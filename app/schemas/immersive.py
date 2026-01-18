@@ -26,8 +26,23 @@ class DepressionRisk(BaseSchema):
     confidence: float = Field(..., ge=0, le=1, description="分析置信度")
 
 
+class DeceptionScore(BaseSchema):
+    """欺骗检测评分"""
+    
+    score: float = Field(..., ge=0, le=1, description="欺骗可能性评分")
+    confidence: float = Field(..., ge=0, le=1, description="分析置信度")
+
+
+class CandidateScores(BaseSchema):
+    """候选人心理评分（三项捆绑）"""
+    
+    big_five: Optional[BigFivePersonality] = Field(None, description="大五人格")
+    deception: Optional[DeceptionScore] = Field(None, description="欺骗检测")
+    depression: Optional[DepressionRisk] = Field(None, description="抑郁风险")
+
+
 class SpeechFeatures(BaseSchema):
-    """语音特征分析"""
+    """语音特征分析（已废弃，保留兼容）"""
     
     pace: Literal["slow", "normal", "fast"] = Field("normal", description="语速")
     volume: float = Field(0, ge=0, le=1, description="音量")
@@ -225,11 +240,71 @@ class StateRecordCreate(BaseSchema):
 
 
 class SyncDataRequest(BaseSchema):
-    """同步实时数据请求"""
+    """同步实时数据请求（旧版，保留兼容）"""
     
     transcripts: Optional[List[TranscriptCreate]] = Field(None, description="转录数据列表")
     speaker_segments: Optional[List[SpeakerSegmentCreate]] = Field(None, description="说话人分段列表")
     state_records: Optional[List[StateRecordCreate]] = Field(None, description="状态记录列表")
+
+
+# ========== 重构后的简化 Schema ==========
+
+class UtteranceCreate(BaseSchema):
+    """发言记录（简化版）"""
+    
+    speaker: Literal["interviewer", "candidate"] = Field(..., description="说话人")
+    text: str = Field(..., min_length=1, description="发言内容")
+    timestamp: float = Field(..., description="时间戳（毫秒或秒）")
+    
+    # 候选人心理评分（每次sync都带上，不管speaker是谁）
+    candidate_scores: Optional[CandidateScores] = Field(None, description="候选人心理评分")
+
+
+class SimplifiedSyncRequest(BaseSchema):
+    """简化的同步请求"""
+    
+    utterances: List[UtteranceCreate] = Field(..., min_length=1, description="发言记录列表")
+
+
+class OverallDepression(BaseSchema):
+    """总体抑郁水平"""
+    
+    avg_score: float = Field(0, description="平均抑郁评分")
+    final_level: Literal["low", "medium", "high"] = Field("low", description="最终风险等级")
+
+
+class CompleteStatistics(BaseSchema):
+    """完成时的统计数据"""
+    
+    total_utterances: int = Field(0, description="总发言数")
+    interviewer_utterances: int = Field(0, description="面试官发言数")
+    candidate_utterances: int = Field(0, description="候选人发言数")
+    interviewer_ratio: float = Field(0, description="面试官发言占比")
+    candidate_ratio: float = Field(0, description="候选人发言占比")
+    overall_depression: Optional[OverallDepression] = Field(None, description="总体抑郁水平")
+
+
+class ConversationHistoryItem(BaseSchema):
+    """会话历史条目（捆绑三项评分）"""
+    
+    speaker: Literal["interviewer", "candidate"] = Field(..., description="说话人")
+    text: str = Field(..., description="发言内容")
+    timestamp: str = Field(..., description="时间戳（ISO格式）")
+    candidate_scores: Optional[CandidateScores] = Field(None, description="候选人心理评分")
+
+
+class SimplifiedCompleteResponse(BaseSchema):
+    """简化的完成响应"""
+    
+    session_id: str = Field(..., description="会话ID")
+    duration_seconds: float = Field(0, description="会话时长（秒）")
+    start_time: Optional[str] = Field(None, description="开始时间")
+    end_time: Optional[str] = Field(None, description="结束时间")
+    
+    statistics: CompleteStatistics = Field(default_factory=CompleteStatistics, description="统计数据")
+    conversation_history: List[ConversationHistoryItem] = Field(default_factory=list, description="会话历史")
+    
+    candidate_info: Optional[Dict] = Field(None, description="候选人信息")
 
 
 class SessionStatistics(BaseSchema):
@@ -295,3 +370,34 @@ class QuestionSuggestionResponse(BaseSchema):
     psychological_context: Optional[str] = Field(None, description="心理状态上下文")
     timing_suggestion: Optional[str] = Field(None, description="提问时机建议")
     expected_response_indicators: Optional[List[str]] = Field(None, description="预期回答指标")
+
+
+# ========== 导出列表 ==========
+__all__ = [
+    "BigFivePersonality",
+    "DepressionRisk",
+    "DeceptionScore",
+    "CandidateScores",
+    "SpeechFeatures",
+    "SpeakerSegment",
+    "EmotionState",
+    "CandidateState",
+    "ImmersiveSessionCreate",
+    "ImmersiveSessionUpdate",
+    "ImmersiveSessionResponse",
+    "ImmersiveSessionDetailResponse",
+    "TranscriptCreate",
+    "SpeakerSegmentCreate",
+    "StateRecordCreate",
+    "SyncDataRequest",
+    "UtteranceCreate",
+    "SimplifiedSyncRequest",
+    "OverallDepression",
+    "CompleteStatistics",
+    "ConversationHistoryItem",
+    "SimplifiedCompleteResponse",
+    "GenerateQuestionsRequest",
+    "QuestionSuggestionResponse",
+    "SessionStatistics",
+    "PsychologicalSummary",
+]

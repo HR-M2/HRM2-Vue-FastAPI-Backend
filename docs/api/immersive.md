@@ -2,61 +2,48 @@
 
 ## 概述
 
-沉浸式面试模块提供双摄像头面试、说话人识别、实时状态分析等功能，支持完整的心理分析数据收集和处理。
+沉浸式面试模块提供双摄像头面试、说话人识别、实时心理分析等功能。
 
 **基础路径**: `/api/v1/immersive`
 
-**特性**:
+**核心特性**:
 - 🎥 双摄像头支持（本地 + 远程推流）
 - 🎤 实时语音转录和说话人识别
-- 🧠 大五人格分析和抑郁风险评估
-- 📊 实时心理状态监控
-- 📈 面试完成后即时数据汇总
+- 🧠 三项心理评分：大五人格、欺骗检测、抑郁风险
+- 📊 面试完成后返回完整会话历史和统计数据
 
 ## 数据模型
 
-### 核心实体
+### 候选人心理评分 (CandidateScores)
+
+每次 sync 都会携带候选人的三项心理评分（不管当前发言人是谁）：
 
 ```json
 {
-  "id": "会话ID",
-  "application_id": "应聘申请ID",
-  "local_camera_enabled": true,
-  "stream_url": "rtmp://example.com/live/stream",
-  "is_recording": false,
-  "is_completed": false,
-  "start_time": "2024-01-01T10:00:00Z",
-  "end_time": "2024-01-01T10:30:00Z",
-  "duration_seconds": 1800,
-  "transcripts": [...],
-  "speaker_segments": [...],
-  "state_history": [...],
-  "statistics": {...},
-  "psychological_summary": {...}
+  "big_five": {
+    "openness": 0.75,
+    "conscientiousness": 0.82,
+    "extraversion": 0.68,
+    "agreeableness": 0.71,
+    "neuroticism": 0.35
+  },
+  "deception": {
+    "score": 0.15,
+    "confidence": 0.85
+  },
+  "depression": {
+    "score": 22.1,
+    "level": "low",
+    "confidence": 0.88
+  }
 }
 ```
 
-### 心理分析数据
-
-#### 大五人格 (Big Five Personality)
-```json
-{
-  "openness": 0.75,        // 开放性 (0-1)
-  "conscientiousness": 0.82, // 尽责性 (0-1)
-  "extraversion": 0.68,    // 外向性 (0-1)
-  "agreeableness": 0.71,   // 宜人性 (0-1)
-  "neuroticism": 0.35      // 神经质 (0-1)
-}
-```
-
-#### 抑郁风险评估
-```json
-{
-  "score": 15.2,           // 抑郁可能性 (0-100)
-  "level": "low",          // 风险等级: low/medium/high
-  "confidence": 0.88       // 分析置信度 (0-1)
-}
-```
+| 字段 | 说明 |
+|-----|------|
+| `big_five` | 大五人格分析（各维度 0-1） |
+| `deception` | 欺骗检测（score: 0-1，越高越可能欺骗） |
+| `depression` | 抑郁风险（score: 0-100，level: low/medium/high）|
 
 ## API 接口
 
@@ -168,12 +155,12 @@ POST /api/v1/immersive/{session_id}/stop
 POST /api/v1/immersive/{session_id}/complete
 ```
 
-**重要**: 此接口会返回完整的面试数据汇总，包括：
-- 所有转录记录
-- 说话人分段（含心理分析）
-- 状态历史记录
-- 统计数据汇总
-- 心理分析汇总
+**重要**: 此接口会返回简化的面试数据汇总，包括：
+- **统计数据**：发言数、发言占比、总体抑郁水平
+- **会话历史**：每条记录捆绑三项心理评分（大五人格、欺骗检测、抑郁值）
+- **候选人信息**
+
+数据会自动保存到 `final_analysis` 字段供后续推荐使用。
 
 **响应示例**:
 ```json
@@ -181,42 +168,55 @@ POST /api/v1/immersive/{session_id}/complete
   "success": true,
   "message": "沉浸式面试会话已完成",
   "data": {
-    "session_info": {
-      "id": "session_123",
-      "duration_seconds": 1800,
-      "start_time": "2024-01-01T10:00:00Z",
-      "end_time": "2024-01-01T10:30:00Z",
-      "is_completed": true
-    },
+    "session_id": "session_123",
+    "duration_seconds": 1800,
+    "start_time": "2024-01-01T10:00:00",
+    "end_time": "2024-01-01T10:30:00",
+    
     "statistics": {
-      "total_segments": 25,
-      "candidate_segments": 15,
-      "interviewer_segments": 10,
-      "candidate_speak_ratio": 0.6,
-      "interviewer_speak_ratio": 0.4,
-      "avg_engagement": 0.82,
-      "avg_confidence": 0.75,
-      "avg_nervousness": 0.25,
-      "session_quality_score": 88.5
+      "total_utterances": 50,
+      "interviewer_utterances": 20,
+      "candidate_utterances": 30,
+      "interviewer_ratio": 0.4,
+      "candidate_ratio": 0.6,
+      "overall_depression": {
+        "avg_score": 18.5,
+        "final_level": "low"
+      }
     },
-    "psychological_summary": {
-      "final_big_five": {
-        "openness": {
-          "score": 0.75,
-          "percentile": 78,
-          "description": "较高的开放性，乐于接受新想法"
+    
+    "conversation_history": [
+      {
+        "speaker": "interviewer",
+        "text": "请介绍一下你自己",
+        "timestamp": "2024-01-01T10:00:05",
+        "candidate_scores": {
+          "big_five": {
+            "openness": 0.75,
+            "conscientiousness": 0.82,
+            "extraversion": 0.68,
+            "agreeableness": 0.71,
+            "neuroticism": 0.35
+          },
+          "deception": {
+            "score": 0.12,
+            "confidence": 0.88
+          },
+          "depression": {
+            "score": 18.5,
+            "level": "low",
+            "confidence": 0.85
+          }
         }
       },
-      "depression_assessment": {
-        "overall_score": 16.8,
-        "risk_level": "low",
-        "trend_analysis": "stable"
-      },
-      "psychological_wellness_score": 85.2
-    },
-    "full_transcripts": [...],
-    "full_speaker_segments": [...],
-    "full_state_history": [...],
+      {
+        "speaker": "candidate",
+        "text": "我是一名软件工程师，有5年经验...",
+        "timestamp": "2024-01-01T10:00:15",
+        "candidate_scores": {...}
+      }
+    ],
+    
     "candidate_info": {
       "name": "张三",
       "position_title": "高级软件工程师"
@@ -227,129 +227,81 @@ POST /api/v1/immersive/{session_id}/complete
 
 ### 3. 实时数据同步
 
-#### 3.1 批量同步数据 ⭐
+#### 3.1 同步发言数据 ⭐
 ```http
 POST /api/v1/immersive/{session_id}/sync
 ```
 
+**简化的请求结构**：每次同步发送一个或多个发言记录，每条记录都带上候选人的三项心理评分。
+
 **请求体**:
 ```json
 {
-  "transcripts": [
+  "utterances": [
     {
       "speaker": "interviewer",
       "text": "请介绍一下你自己",
-      "is_final": true
-    }
-  ],
-  "speaker_segments": [
+      "timestamp": 1768720937024,
+      "candidate_scores": {
+        "big_five": {
+          "openness": 0.75,
+          "conscientiousness": 0.82,
+          "extraversion": 0.68,
+          "agreeableness": 0.71,
+          "neuroticism": 0.35
+        },
+        "deception": {
+          "score": 0.15,
+          "confidence": 0.85
+        },
+        "depression": {
+          "score": 22.1,
+          "level": "low",
+          "confidence": 0.88
+        }
+      }
+    },
     {
       "speaker": "candidate",
-      "start_time": 10.5,
-      "end_time": 25.3,
-      "text": "我是一名软件工程师...",
-      "confidence": 0.92,
-      "big_five_personality": {
-        "openness": 0.75,
-        "conscientiousness": 0.82,
-        "extraversion": 0.68,
-        "agreeableness": 0.71,
-        "neuroticism": 0.35
-      },
-      "depression_risk": {
-        "score": 15.2,
-        "level": "low",
-        "confidence": 0.88
+      "text": "我是一名软件工程师，有5年经验...",
+      "timestamp": 1768720950123,
+      "candidate_scores": {
+        "big_five": {...},
+        "deception": {...},
+        "depression": {...}
       }
-    }
-  ],
-  "state_records": [
-    {
-      "segment_id": "seg_001",
-      "emotion": {
-        "emotion": "confident",
-        "confidence": 0.85,
-        "valence": 0.6,
-        "arousal": 0.4
-      },
-      "engagement": 0.8,
-      "nervousness": 0.2,
-      "confidence_level": 0.75,
-      "eye_contact": 0.9,
-      "posture_score": 0.85,
-      "speech_clarity": 0.9,
-      "speech_pace": "normal"
     }
   ]
 }
 ```
 
-#### 3.2 添加单条转录
-```http
-POST /api/v1/immersive/{session_id}/transcript
-```
+**字段说明**:
+| 字段 | 类型 | 说明 |
+|-----|------|------|
+| `speaker` | string | 发言人：`interviewer` 或 `candidate` |
+| `text` | string | 发言内容 |
+| `timestamp` | number | 毫秒时间戳（后端自动转秒存储） |
+| `candidate_scores` | object | 候选人三项心理评分（不管 speaker 是谁都要带） |
 
-**请求体**:
+**响应示例**:
 ```json
 {
-  "speaker": "candidate",
-  "text": "我认为这个问题很有趣...",
-  "is_final": true
-}
-```
-
-#### 3.3 添加说话人分段
-```http
-POST /api/v1/immersive/{session_id}/segment
-```
-
-**请求体**:
-```json
-{
-  "speaker": "candidate",
-  "start_time": 30.0,
-  "end_time": 45.5,
-  "text": "关于这个技术问题，我的理解是...",
-  "confidence": 0.95,
-  "big_five_personality": {
-    "openness": 0.78,
-    "conscientiousness": 0.85,
-    "extraversion": 0.70,
-    "agreeableness": 0.73,
-    "neuroticism": 0.32
-  },
-  "depression_risk": {
-    "score": 14.8,
-    "level": "low",
-    "confidence": 0.90
+  "success": true,
+  "message": "实时数据同步成功",
+  "data": {
+    "session_id": "session_123",
+    "synced_count": 2,
+    "total_utterances": 15
   }
 }
 ```
 
-#### 3.4 添加状态记录
+#### 3.2 旧版同步接口（兼容）
 ```http
-POST /api/v1/immersive/{session_id}/state
+POST /api/v1/immersive/{session_id}/sync-legacy
 ```
 
-**请求体**:
-```json
-{
-  "segment_id": "seg_002",
-  "emotion": {
-    "emotion": "focused",
-    "confidence": 0.88,
-    "valence": 0.5,
-    "arousal": 0.6
-  },
-  "engagement": 0.85,
-  "nervousness": 0.15,
-  "confidence_level": 0.80,
-  "eye_contact": 0.92,
-  "posture_score": 0.88,
-  "speech_clarity": 0.93,
-  "speech_pace": "normal"
-}
-```
+保留旧版接口以兼容现有前端，支持 `transcripts`、`speaker_segments`、`state_records` 分开传输。
 
 ### 4. 智能问题建议 ⭐
 
@@ -509,18 +461,15 @@ GET /api/v1/immersive/{session_id}/statistics
 
 ### 数据收集建议
 
-#### 转录数据
-- 建议每 2-5 秒同步一次转录数据
-- 使用 `is_final=false` 表示临时结果，`is_final=true` 表示最终结果
+#### Sync 请求
+- 建议每 2-5 秒同步一次发言数据
+- 每次 sync 都带上当前候选人的三项心理评分（不管发言人是谁）
+- 时间戳使用毫秒格式，后端会自动转换为秒存储
 
-#### 说话人分段
-- 当检测到说话人切换时添加分段
-- 候选人分段应包含心理分析数据
-- 面试官分段可以不包含心理分析
-
-#### 状态记录
-- 建议每 10-30 秒记录一次候选人状态
-- 关键时刻（如回答重要问题时）可以增加记录频率
+#### 心理评分更新
+- 大五人格：基于候选人回答内容的实时分析
+- 欺骗检测：基于语音/表情的实时检测
+- 抑郁风险：基于整体表现的持续评估
 
 ## 错误处理
 
@@ -590,6 +539,15 @@ http://127.0.0.1:8000/docs
 
 ---
 
-**版本**: v1.0  
-**更新时间**: 2024-01-17  
+**版本**: v2.0 (重构版)  
+**更新时间**: 2025-01-18  
 **维护者**: HRM2 开发团队
+
+### 变更记录
+
+**v2.0 (2025-01-18)**
+- 简化 `/sync` 接口：使用 `utterances` 结构替代分散的 `transcripts`/`speaker_segments`/`state_records`
+- 简化 `/complete` 返回：统一返回 `statistics` + `conversation_history` 结构
+- 新增三项心理评分捆绑：`big_five` + `deception` + `depression`
+- 完成数据自动保存到 `final_analysis` 供后续推荐使用
+- 废弃 `state_records`，保留旧版接口 `/sync-legacy` 兼容

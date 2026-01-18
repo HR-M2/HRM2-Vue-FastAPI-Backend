@@ -17,7 +17,9 @@ from app.schemas.immersive import (
     TranscriptCreate,
     SpeakerSegmentCreate,
     StateRecordCreate,
-    SyncDataRequest
+    SyncDataRequest,
+    SimplifiedSyncRequest,
+    UtteranceCreate,
 )
 from .base import CRUDBase
 
@@ -232,13 +234,20 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
         session = await self.get(db, session_id)
         if not session:
             raise ValueError(f"会话不存在: {session_id}")
+
+        start_time = float(segment_data.start_time)
+        end_time = float(segment_data.end_time)
+        if start_time > 1e10:
+            start_time = start_time / 1000.0
+        if end_time > 1e10:
+            end_time = end_time / 1000.0
         
         # 准备分段数据
         segment = {
             "speaker": segment_data.speaker,
-            "start_time": segment_data.start_time,
-            "end_time": segment_data.end_time,
-            "duration": segment_data.end_time - segment_data.start_time,
+            "start_time": start_time,
+            "end_time": end_time,
+            "duration": max(0.0, end_time - start_time),
             "text": segment_data.text,
             "confidence": segment_data.confidence
         }
@@ -305,7 +314,7 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
         session_id: str,
         sync_data: SyncDataRequest
     ) -> ImmersiveSession:
-        """批量同步实时数据"""
+        """批量同步实时数据（旧版，保留兼容）"""
         session = await self.get(db, session_id)
         if not session:
             raise ValueError(f"会话不存在: {session_id}")
@@ -320,11 +329,68 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
             for segment_data in sync_data.speaker_segments:
                 await self.add_speaker_segment(db, session_id, segment_data)
         
-        # 同步状态记录
+        # 同步状态记录（已废弃）
         if sync_data.state_records:
             for state_data in sync_data.state_records:
                 await self.add_state_record(db, session_id, state_data)
         
+        return session
+    
+    async def sync_utterances(
+        self,
+        db: AsyncSession,
+        session_id: str,
+        sync_data: SimplifiedSyncRequest
+    ) -> ImmersiveSession:
+        """简化的同步方法：同步发言记录（带三项心理评分）"""
+        session = await self.get(db, session_id)
+        if not session:
+            raise ValueError(f"会话不存在: {session_id}")
+        
+        if session.speaker_segments is None:
+            session.speaker_segments = []
+        if session.transcripts is None:
+            session.transcripts = []
+        
+        for utterance in sync_data.utterances:
+            # 时间戳处理：毫秒转秒
+            timestamp = float(utterance.timestamp)
+            if timestamp > 1e10:
+                timestamp = timestamp / 1000.0
+            
+            # 构建 speaker_segment 数据（主存储）
+            segment = {
+                "speaker": utterance.speaker,
+                "text": utterance.text,
+                "timestamp": timestamp,
+            }
+            
+            # 添加候选人心理评分（不管 speaker 是谁都记录）
+            if utterance.candidate_scores:
+                scores = utterance.candidate_scores
+                segment["candidate_scores"] = {}
+                if scores.big_five:
+                    segment["candidate_scores"]["big_five"] = scores.big_five.model_dump()
+                if scores.deception:
+                    segment["candidate_scores"]["deception"] = scores.deception.model_dump()
+                if scores.depression:
+                    segment["candidate_scores"]["depression"] = scores.depression.model_dump()
+            
+            session.speaker_segments.append(segment)
+            
+            # 同时写入 transcripts（简化版，兼容问题生成）
+            transcript = {
+                "speaker": utterance.speaker,
+                "text": utterance.text,
+                "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
+                "is_final": True
+            }
+            session.transcripts.append(transcript)
+        
+        flag_modified(session, "speaker_segments")
+        flag_modified(session, "transcripts")
+        await db.flush()
+        await db.refresh(session)
         return session
     
     # ========== 统计和分析方法 ==========
@@ -401,7 +467,7 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
         db: AsyncSession,
         session_id: str
     ) -> Dict[str, Any]:
-        """获取完整会话汇总"""
+        """获取完整会话汇总（旧版，保留兼容）"""
         session = await self.get_with_application(db, session_id)
         if not session:
             raise ValueError(f"会话不存在: {session_id}")
@@ -438,6 +504,102 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
             "speaker_segments": session.speaker_segments or [],
             "state_history": session.state_history or []
         }
+    
+    async def get_simplified_complete_data(
+        self,
+        db: AsyncSession,
+        session_id: str
+    ) -> Dict[str, Any]:
+        """获取简化的完成数据（重构后的新方法）"""
+        session = await self.get_with_application(db, session_id)
+        if not session:
+            raise ValueError(f"会话不存在: {session_id}")
+        
+        speaker_segments = session.speaker_segments or []
+        
+        # 统计发言数
+        total_utterances = len(speaker_segments)
+        interviewer_utterances = sum(1 for s in speaker_segments if s.get("speaker") == "interviewer")
+        candidate_utterances = sum(1 for s in speaker_segments if s.get("speaker") == "candidate")
+        
+        # 计算发言占比
+        interviewer_ratio = interviewer_utterances / total_utterances if total_utterances > 0 else 0
+        candidate_ratio = candidate_utterances / total_utterances if total_utterances > 0 else 0
+        
+        # 计算总体抑郁水平
+        depression_scores = []
+        for seg in speaker_segments:
+            scores = seg.get("candidate_scores", {})
+            if scores and scores.get("depression"):
+                depression_scores.append(scores["depression"].get("score", 0))
+        
+        avg_depression = sum(depression_scores) / len(depression_scores) if depression_scores else 0
+        if avg_depression < 30:
+            final_level = "low"
+        elif avg_depression < 60:
+            final_level = "medium"
+        else:
+            final_level = "high"
+        
+        overall_depression = {
+            "avg_score": round(avg_depression, 2),
+            "final_level": final_level
+        }
+        
+        # 构建统计数据
+        statistics = {
+            "total_utterances": total_utterances,
+            "interviewer_utterances": interviewer_utterances,
+            "candidate_utterances": candidate_utterances,
+            "interviewer_ratio": round(interviewer_ratio, 2),
+            "candidate_ratio": round(candidate_ratio, 2),
+            "overall_depression": overall_depression
+        }
+        
+        # 构建会话历史（每条记录捆绑三项评分）
+        conversation_history = []
+        for seg in speaker_segments:
+            timestamp = seg.get("timestamp", 0)
+            # 将时间戳转为ISO格式
+            if isinstance(timestamp, (int, float)):
+                ts_str = datetime.fromtimestamp(timestamp).isoformat()
+            else:
+                ts_str = str(timestamp)
+            
+            item = {
+                "speaker": seg.get("speaker"),
+                "text": seg.get("text", ""),
+                "timestamp": ts_str,
+                "candidate_scores": seg.get("candidate_scores")
+            }
+            conversation_history.append(item)
+        
+        # 候选人信息
+        candidate_info = None
+        if session.application:
+            candidate_info = {}
+            if session.application.resume:
+                candidate_info["name"] = session.application.resume.candidate_name
+            if session.application.position:
+                candidate_info["position_title"] = session.application.position.title
+        
+        # 构建返回数据
+        result = {
+            "session_id": session.id,
+            "duration_seconds": session.duration_seconds or 0,
+            "start_time": session.start_time.isoformat() if session.start_time else None,
+            "end_time": session.end_time.isoformat() if session.end_time else None,
+            "statistics": statistics,
+            "conversation_history": conversation_history,
+            "candidate_info": candidate_info
+        }
+        
+        # 保存到 final_analysis 字段（供后续推荐使用）
+        session.final_analysis = result
+        flag_modified(session, "final_analysis")
+        await db.flush()
+        
+        return result
     
     # ========== 问题建议方法 ==========
     

@@ -24,6 +24,7 @@ from app.schemas.immersive import (
     ImmersiveSessionResponse,
     ImmersiveSessionDetailResponse,
     ImmersiveSessionUpdate,
+    SimplifiedSyncRequest,
     SyncDataRequest,
     TranscriptCreate,
     SpeakerSegmentCreate,
@@ -237,32 +238,24 @@ async def complete_immersive_session(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    完成沉浸式面试会话并返回完整数据汇总
+    完成沉浸式面试会话并返回简化的数据汇总
     
-    包括所有转录记录、心理分析数据、统计信息等
+    返回内容：
+    - 统计数据：发言数、发言占比、总体抑郁水平
+    - 会话历史：每条记录捆绑三项心理评分（大五人格、欺骗检测、抑郁值）
+    - 候选人信息
+    
+    数据会自动保存到 final_analysis 字段供后续推荐使用
     """
     try:
         # 完成会话
-        session = await immersive_crud.complete_session(db, session_id)
+        await immersive_crud.complete_session(db, session_id)
         
-        # 获取完整汇总数据
-        summary_data = await immersive_crud.get_session_summary(db, session_id)
-        
-        # 构建详细响应
-        response = ImmersiveSessionDetailResponse.model_validate(session)
-        response.statistics = summary_data["statistics"]
-        response.psychological_summary = summary_data["psychological_summary"]
-        response.full_transcripts = summary_data["transcripts"]
-        response.full_speaker_segments = summary_data["speaker_segments"]
-        response.full_state_history = summary_data["state_history"]
-        
-        # 添加关联信息
-        if summary_data["candidate_info"]:
-            response.candidate_name = summary_data["candidate_info"].get("name")
-            response.position_title = summary_data["candidate_info"].get("position_title")
+        # 获取简化的完成数据（同时保存到 final_analysis）
+        complete_data = await immersive_crud.get_simplified_complete_data(db, session_id)
         
         return success_response(
-            data=response.model_dump(),
+            data=complete_data,
             message="沉浸式面试会话已完成"
         )
     except ValueError as e:
@@ -274,18 +267,60 @@ async def complete_immersive_session(
 @router.post("/{session_id}/sync", summary="同步实时数据", response_model=DictResponse)
 async def sync_realtime_data(
     session_id: str,
+    data: SimplifiedSyncRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    同步实时数据（简化版）
+    
+    请求结构：
+    ```json
+    {
+      "utterances": [
+        {
+          "speaker": "interviewer" | "candidate",
+          "text": "发言内容",
+          "timestamp": 1768720937024,  // 毫秒时间戳
+          "candidate_scores": {        // 候选人心理评分（每次都带）
+            "big_five": {...},
+            "deception": {...},
+            "depression": {...}
+          }
+        }
+      ]
+    }
+    """
+    try:
+        session = await immersive_crud.sync_utterances(db, session_id, data)
+        
+        return success_response(
+            data={
+                "session_id": session.id,
+                "synced_count": len(data.utterances),
+                "total_utterances": len(session.speaker_segments) if session.speaker_segments else 0
+            },
+            message="实时数据同步成功"
+        )
+    except ValueError as e:
+        raise NotFoundException(str(e))
+    except Exception as e:
+        raise BadRequestException(f"数据同步失败: {str(e)}")
+
+
+@router.post("/{session_id}/sync-legacy", summary="同步实时数据（旧版）", response_model=DictResponse)
+async def sync_realtime_data_legacy(
+    session_id: str,
     data: SyncDataRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    批量同步实时数据
+    批量同步实时数据（旧版，保留兼容）
     
     包括转录记录、说话人分段、状态记录等
     """
     try:
         session = await immersive_crud.sync_realtime_data(db, session_id, data)
         
-        # 统计同步的数据量
         sync_count = {
             "transcripts": len(data.transcripts) if data.transcripts else 0,
             "speaker_segments": len(data.speaker_segments) if data.speaker_segments else 0,
