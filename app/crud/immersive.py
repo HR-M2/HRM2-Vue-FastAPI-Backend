@@ -475,13 +475,12 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
                     "description": session.application.position.description if session.application and session.application.position else ""
                 }
             } if session.application else {},
-            "transcripts": session.transcripts or [],
-            "state_history": session.state_history or []
+            "transcripts": session.transcripts or []
         }
         
         # 构建上下文
         context = ai_agent.build_question_context(
-            session_data, use_psychological_context, use_conversation_history
+            session_data, False, use_conversation_history
         )
         
         # 调用AI服务生成问题

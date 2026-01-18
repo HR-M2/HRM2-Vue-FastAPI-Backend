@@ -441,7 +441,7 @@ async def generate_question_suggestions(
                 "generation_context": {
                     "difficulty": data.difficulty,
                     "question_type": data.question_type,
-                    "psychological_context_used": data.use_psychological_context,
+                    "psychological_context_used": False,
                     "conversation_history_used": data.use_conversation_history
                 }
             },

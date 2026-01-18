@@ -35,13 +35,14 @@ class ImmersiveInterviewAgent:
             suggestions = await self._generate_ai_questions(
                 count, difficulty, focus_areas, question_type, context
             )
-            return suggestions
+            return self._ensure_contextual_first(suggestions, context, count)
         except Exception as e:
             # 如果AI服务失败，回退到模拟数据
             logger.warning(f"AI问题生成失败，使用备用方案: {e}")
-            return self._generate_mock_questions(
+            suggestions = self._generate_mock_questions(
                 count, difficulty, focus_areas, question_type, context
             )
+            return self._ensure_contextual_first(suggestions, context, count)
     
     async def _generate_ai_questions(
         self,
@@ -55,13 +56,13 @@ class ImmersiveInterviewAgent:
         
         # 构建AI提示词
         system_prompt = """你是一位资深的面试官，专门负责沉浸式面试的问题建议。
-你需要根据候选人的心理状态、对话历史和岗位要求，生成智能的面试问题建议。
+你需要根据候选人的简历信息与对话上下文，生成智能的面试问题建议。
 
 沉浸式面试的特点：
-- 实时监控候选人的心理状态（情绪、紧张程度、参与度等）
-- 基于心理分析数据调整问题策略
-- 考虑对话流程和话题连贯性
+- 结合简历关键点进行针对性提问
+- 结合对话历史保持话题连贯性
 - 提供问题时机建议"""
+
 
         user_prompt = self._build_ai_question_prompt(
             count, difficulty, focus_areas, question_type, context
@@ -77,7 +78,7 @@ class ImmersiveInterviewAgent:
                     "type": q.get("type", "behavioral"),
                     "priority": q.get("priority", 5),
                     "reason": q.get("reason", ""),
-                    "psychological_context": q.get("psychological_context", ""),
+                    "psychological_context": "",
                     "timing_suggestion": q.get("timing_suggestion", "适合当前提问"),
                     "expected_response_indicators": q.get("expected_response_indicators", [
                         "技术深度", "表达清晰度", "情绪稳定性", "自信程度"
@@ -90,7 +91,7 @@ class ImmersiveInterviewAgent:
         except Exception as e:
             logger.error(f"AI问题生成失败: {e}")
             raise
-    
+
     def _build_ai_question_prompt(
         self,
         count: int,
@@ -100,20 +101,10 @@ class ImmersiveInterviewAgent:
         context: Dict[str, Any]
     ) -> str:
         """构建AI问题生成的提示词"""
-        
-        # 心理状态分析
-        psychological_context = context.get("psychological_context", {})
-        psychological_desc = "暂无心理状态数据"
-        if psychological_context:
-            emotion = psychological_context.get("current_emotion", {}).get("emotion", "未知")
-            engagement = psychological_context.get("engagement_level", 0)
-            nervousness = psychological_context.get("nervousness_level", 0)
-            confidence = psychological_context.get("confidence_level", 0)
-            psychological_desc = f"当前情绪: {emotion}, 参与度: {engagement:.2f}, 紧张程度: {nervousness:.2f}, 自信程度: {confidence:.2f}"
-        
-        # 对话历史分析
+
         conversation_context = context.get("conversation_context", {})
         conversation_desc = "暂无对话历史"
+        last_response_quote = ""
         if conversation_context:
             recent_topics = conversation_context.get("recent_topics", [])
             last_response = conversation_context.get("last_candidate_response", "")
@@ -121,12 +112,17 @@ class ImmersiveInterviewAgent:
             conversation_desc = f"最近话题: {', '.join(recent_topics) if recent_topics else '无'}, 对话阶段: {flow_stage}"
             if last_response:
                 conversation_desc += f", 最后回答: {last_response[:100]}..."
-        
-        # 候选人和岗位信息
+                last_response_quote = f"\n\n最后一次候选人回答原文（节选）:\n\"{last_response[:120]}\""
+
         candidate_info = context.get("candidate_info", {})
+        resume_content = candidate_info.get("content", "")
+
         position_info = context.get("position_info", {})
-        
-        prompt = f"""# 沉浸式面试问题生成请求
+        position_title = position_info.get("title", "未知")
+        required_skills = position_info.get("required_skills", [])
+        position_desc = position_info.get("description", "")
+
+        prompt = f"""# 面试问题生成请求
 
 ## 基本要求
 - 生成问题数量: {count}
@@ -134,66 +130,157 @@ class ImmersiveInterviewAgent:
 - 问题类型: {question_type}
 - 关注领域: {', '.join(focus_areas) if focus_areas else '无特定要求'}
 
-## 候选人信息
+## 候选人简历信息
 - 姓名: {candidate_info.get('name', '未知')}
-- 简历摘要: {candidate_info.get('content', '未提供')[:200]}...
+- 简历内容（节选）:
+{resume_content[:1200]}
 
 ## 岗位信息
-- 职位: {position_info.get('title', '未知')}
-- 技能要求: {', '.join(position_info.get('required_skills', [])) if position_info.get('required_skills') else '未指定'}
-- 职位描述: {position_info.get('description', '未提供')[:200]}...
+- 职位: {position_title}
+- 技能要求: {', '.join(required_skills) if required_skills else '未指定'}
+- 职位描述（节选）:
+{position_desc[:800]}
 
-## 心理状态分析
-{psychological_desc}
+## 对话上下文
+{conversation_desc}{last_response_quote}
 
-## 对话历史分析
-{conversation_desc}
-
-## 问题生成策略
-
-### 根据心理状态调整：
-1. **高紧张程度 (>0.7)**: 使用缓解性问题，避免增加压力
-2. **低参与度 (<0.5)**: 使用激发兴趣的问题，提高互动
-3. **高自信程度 (>0.8)**: 可以提出挑战性问题，深入考察
-4. **情绪不稳定**: 使用稳定性问题，观察情绪管理能力
-
-### 根据对话阶段调整：
-- **opening**: 轻松开场问题
-- **warming_up**: 逐步深入的问题
-- **deep_dive**: 核心技能考察问题
-- **closing**: 总结性或开放性问题
-
-### 问题类型说明：
-- **technical**: 技术能力考察
-- **behavioral**: 行为面试问题
-- **situational**: 情景模拟问题
-- **psychological**: 心理状态相关问题
-- **mixed**: 混合类型
+## 生成规则
+0. 如果存在对话上下文（不是“暂无对话历史”），请确保 suggestions[0] 必须是承接上下文的追问（优先围绕“最后一次候选人回答原文（节选）”，其次围绕最近话题），并将该条 priority 设置为 1
+0.1 追问要求：问题要短、直接、单句为主，不要大段陈述；尽量引用候选人原话中的短片段（用引号，<=20字）作为锚点再追问；尽量只问一个点，避免一问多问
+1. 问题要同时贴合岗位要求与候选人简历中的具体经历/项目/技能点
+2. 如果对话上下文中已有话题，优先生成与当前话题连续的追问
+3. 避免重复已经问过的问题
+4. 提供清晰的提问时机建议
 
 ## JSON返回格式
 {{
-    "suggestions": [
-        {{
-            "question": "完整的问题内容",
-            "type": "问题类型 (technical/behavioral/situational/psychological)",
-            "priority": 1-10的优先级数字,
-            "reason": "推荐这个问题的具体原因",
-            "psychological_context": "基于心理状态的上下文说明",
-            "timing_suggestion": "提问时机建议",
-            "expected_response_indicators": ["预期回答指标1", "指标2", "指标3"]
-        }}
-    ]
+  "suggestions": [
+    {{
+      "question": "完整的问题内容",
+      "type": "问题类型 (technical/behavioral/situational/mixed)",
+      "priority": 1,
+      "reason": "推荐原因",
+      "timing_suggestion": "提问时机建议",
+      "expected_response_indicators": ["技术深度", "表达清晰度"]
+    }}
+  ]
 }}
 
-请根据以上信息生成{count}个高质量的面试问题建议，确保问题：
-1. 符合候选人当前的心理状态
-2. 与对话历史和话题流向连贯
-3. 难度适中，能有效考察相关能力
-4. 包含明确的提问时机建议
-
 请直接返回JSON，不要包含其他内容。"""
-        
+
+        # print(prompt)
         return prompt
+
+    def _ensure_contextual_first(
+        self,
+        suggestions: List[Dict[str, Any]],
+        context: Dict[str, Any],
+        count: int
+    ) -> List[Dict[str, Any]]:
+        conversation_context = context.get("conversation_context", {})
+        if not conversation_context:
+            return suggestions
+
+        last_response = conversation_context.get("last_candidate_response")
+        recent_topics = conversation_context.get("recent_topics", [])
+        if not last_response and not recent_topics:
+            return suggestions
+
+        def _score_question(text: str) -> int:
+            if not text:
+                return 0
+
+            score = 0
+            if "你刚才" in text or "刚才" in text or "你提到" in text or "继续" in text or "追问" in text:
+                score += 3
+
+            if last_response:
+                frag = str(last_response)[:12]
+                if frag and frag in text:
+                    score += 6
+
+            for topic in recent_topics or []:
+                if topic and str(topic) in text:
+                    score += 2
+
+            return score
+
+        best_idx = -1
+        best_score = -1
+        for idx, s in enumerate(suggestions):
+            q = s.get("question", "")
+            sc = _score_question(q)
+            if sc > best_score:
+                best_score = sc
+                best_idx = idx
+
+        if best_idx > 0 and best_score > 0:
+            suggestions = [suggestions[best_idx]] + suggestions[:best_idx] + suggestions[best_idx + 1:]
+        elif best_score <= 0:
+            if last_response:
+                snippet = str(last_response).replace("\n", " ").strip()[:18]
+                question = f"你刚才说“{snippet}…”，能举个具体例子吗？"
+            else:
+                topic = str(recent_topics[0])
+                question = f"关于“{topic}”，你能给一个你亲自做过的例子吗？"
+
+            suggestions = [{
+                "question": question,
+                "type": "followup",
+                "priority": 1,
+                "reason": "基于对话上下文的追问，保证话题连贯并验证细节",
+                "psychological_context": "",
+                "timing_suggestion": "建议紧接上一轮对话追问",
+                "expected_response_indicators": [
+                    "技术深度",
+                    "表达清晰度"
+                ]
+            }] + suggestions
+
+        suggestions = suggestions[:count]
+
+        if suggestions:
+            for i, s in enumerate(suggestions):
+                s["priority"] = i + 1
+
+        return suggestions
+
+    def build_question_context(
+        self,
+        session_data: Dict[str, Any],
+        use_psychological_context: bool,
+        use_conversation_history: bool
+    ) -> Dict[str, Any]:
+        """构建问题生成的上下文信息"""
+        context: Dict[str, Any] = {
+            "candidate_info": {},
+            "position_info": {},
+            "conversation_context": {}
+        }
+
+        if session_data.get("application") and session_data["application"].get("resume"):
+            context["candidate_info"] = {
+                "name": session_data["application"]["resume"].get("candidate_name"),
+                "content": session_data["application"]["resume"].get("content", "")
+            }
+
+        if session_data.get("application") and session_data["application"].get("position"):
+            context["position_info"] = {
+                "title": session_data["application"]["position"].get("title"),
+                "required_skills": session_data["application"]["position"].get("required_skills", []),
+                "description": session_data["application"]["position"].get("description", "")
+            }
+
+        if use_conversation_history and session_data.get("transcripts"):
+            transcripts = session_data["transcripts"]
+            recent_transcripts = transcripts[-10:] if len(transcripts) > 10 else transcripts
+            context["conversation_context"] = {
+                "recent_topics": self._extract_topics_from_transcripts(recent_transcripts),
+                "last_candidate_response": self._get_last_candidate_response(recent_transcripts),
+                "conversation_flow": self._analyze_conversation_flow(recent_transcripts)
+            }
+
+        return context
 
     def _generate_mock_questions(
         self,
@@ -204,133 +291,55 @@ class ImmersiveInterviewAgent:
         context: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """生成模拟问题建议（AI服务失败时的备用方案）"""
-        
-        suggestions = []
-        psychological_context = context.get("psychological_context", {})
+
+        suggestions: List[Dict[str, Any]] = []
         conversation_context = context.get("conversation_context", {})
-        
+        candidate_info = context.get("candidate_info", {})
+        resume_content = candidate_info.get("content", "")
+        last_response = conversation_context.get("last_candidate_response")
+        recent_topics = conversation_context.get("recent_topics", [])
+
         for i in range(count):
-            # 根据心理状态调整问题类型
-            if psychological_context.get("nervousness_level", 0) > 0.7:
-                # 候选人紧张，建议缓解问题
-                question = "我看你有点紧张，我们可以先聊聊你最熟悉的项目，放轻松一点"
-                question_type_actual = "psychological"
-                reason = "候选人紧张程度较高，建议使用缓解性问题"
-                timing_suggestion = "立即提问，缓解紧张情绪"
-            elif psychological_context.get("engagement_level", 0) < 0.5:
-                # 参与度低，建议激发兴趣的问题
-                question = "你最感兴趣的技术领域是什么？为什么？"
+            if last_response:
+                snippet = str(last_response).replace("\n", " ").strip()[:18]
+                question = f"你刚才说“{snippet}…”，这里你是怎么做取舍的？"
+                question_type_actual = "followup"
+                reason = "基于候选人上一轮回答进行追问，验证细节与思考过程"
+                timing_suggestion = "建议紧接上一轮回答追问"
+            elif resume_content:
+                question = f"结合你的简历经历，挑一个你最有成就感的项目，说说你的具体贡献与难点（{difficulty}）。"
                 question_type_actual = "behavioral"
-                reason = "候选人参与度较低，建议使用激发兴趣的问题"
-                timing_suggestion = "适合在对话间隙提问"
+                reason = "基于简历信息提问，确保问题有针对性"
+                timing_suggestion = "适合在开场或话题切换时提问"
+            elif "技术能力" in recent_topics:
+                question = f"围绕刚才的技术话题，能给一个更具体的实现细节或数据指标吗？（{difficulty}）"
+                question_type_actual = "technical"
+                reason = "基于对话话题继续深入，补充可验证细节"
+                timing_suggestion = "适合在当前话题结束前提问"
             else:
-                # 正常状态，根据对话历史生成问题
-                recent_topics = conversation_context.get("recent_topics", [])
-                if "技术能力" in recent_topics:
-                    question = f"刚才你提到了技术实现，能具体说说你是如何解决{difficulty}级别的技术挑战的？"
-                    question_type_actual = "technical"
-                    reason = "基于之前的技术讨论，深入了解技术能力"
-                else:
-                    question = f"请描述一个你认为最能体现你能力的项目（{difficulty}难度）"
-                    question_type_actual = "behavioral"
-                    reason = "了解候选人的核心能力和项目经验"
-                timing_suggestion = "适合在当前话题结束后提问"
-            
+                question = f"我们继续聊聊你的项目经历：你遇到过最棘手的问题是什么？你怎么解决的？（{difficulty}）"
+                question_type_actual = "behavioral"
+                reason = "在缺少足够上下文时，使用通用但可展开的问题"
+                timing_suggestion = "适合在任意阶段提问"
+
             suggestion = {
                 "question": question,
                 "type": question_type_actual,
-                "priority": max(1, count - i),  # 优先级递减
+                "priority": max(1, count - i),
                 "reason": reason,
-                "psychological_context": self._get_psychological_context_description(psychological_context),
+                "psychological_context": "",
                 "timing_suggestion": timing_suggestion,
                 "expected_response_indicators": [
                     "技术深度",
-                    "表达清晰度", 
+                    "表达清晰度",
                     "情绪稳定性",
                     "自信程度"
                 ]
             }
-            
+
             suggestions.append(suggestion)
-        
+
         return suggestions
-    
-    def _get_psychological_context_description(self, psychological_context: Dict) -> str:
-        """生成心理状态上下文描述"""
-        if not psychological_context:
-            return "暂无心理状态数据"
-        
-        emotion = psychological_context.get("current_emotion", {}).get("emotion", "未知")
-        engagement = psychological_context.get("engagement_level", 0)
-        nervousness = psychological_context.get("nervousness_level", 0)
-        confidence = psychological_context.get("confidence_level", 0)
-        
-        return f"当前情绪: {emotion}, 参与度: {engagement:.2f}, 紧张程度: {nervousness:.2f}, 自信程度: {confidence:.2f}"
-    
-    def build_question_context(
-        self, 
-        session_data: Dict[str, Any], 
-        use_psychological_context: bool,
-        use_conversation_history: bool
-    ) -> Dict[str, Any]:
-        """构建问题生成的上下文信息"""
-        context = {
-            "candidate_info": {},
-            "position_info": {},
-            "psychological_context": {},
-            "conversation_context": {}
-        }
-        
-        # 候选人信息
-        if session_data.get("application") and session_data["application"].get("resume"):
-            context["candidate_info"] = {
-                "name": session_data["application"]["resume"].get("candidate_name"),
-                "content": session_data["application"]["resume"].get("content", "")
-            }
-        
-        # 岗位信息
-        if session_data.get("application") and session_data["application"].get("position"):
-            context["position_info"] = {
-                "title": session_data["application"]["position"].get("title"),
-                "required_skills": session_data["application"]["position"].get("required_skills", []),
-                "description": session_data["application"]["position"].get("description", "")
-            }
-        
-        # 心理分析上下文
-        if use_psychological_context and session_data.get("state_history"):
-            latest_state = self._get_latest_psychological_state(session_data["state_history"])
-            if latest_state:
-                context["psychological_context"] = {
-                    "current_emotion": latest_state.get("emotion", {}),
-                    "engagement_level": latest_state.get("engagement", 0),
-                    "nervousness_level": latest_state.get("nervousness", 0),
-                    "confidence_level": latest_state.get("confidence_level", 0),
-                    "depression_risk_trend": self._get_depression_risk_trend(session_data)
-                }
-        
-        # 对话历史上下文
-        if use_conversation_history and session_data.get("transcripts"):
-            # 获取最近的对话记录
-            transcripts = session_data["transcripts"]
-            recent_transcripts = transcripts[-10:] if len(transcripts) > 10 else transcripts
-            context["conversation_context"] = {
-                "recent_topics": self._extract_topics_from_transcripts(recent_transcripts),
-                "last_candidate_response": self._get_last_candidate_response(recent_transcripts),
-                "conversation_flow": self._analyze_conversation_flow(recent_transcripts)
-            }
-        
-        return context
-    
-    def _get_latest_psychological_state(self, state_history: List[Dict]) -> Optional[Dict]:
-        """获取最新的心理状态"""
-        if not state_history:
-            return None
-        return state_history[-1]
-    
-    def _get_depression_risk_trend(self, session_data: Dict) -> str:
-        """获取抑郁风险趋势"""
-        # 简化实现，实际应该分析历史数据
-        return "stable"
     
     def _extract_topics_from_transcripts(self, transcripts: List[Dict]) -> List[str]:
         """从转录中提取话题（简化版）"""
