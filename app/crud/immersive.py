@@ -553,16 +553,45 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
         
         speaker_segments = session.speaker_segments or []
         
-        # 统计发言数
+        # ========== 发言次数统计 ==========
         total_utterances = len(speaker_segments)
         interviewer_utterances = sum(1 for s in speaker_segments if s.get("speaker") == "interviewer")
         candidate_utterances = sum(1 for s in speaker_segments if s.get("speaker") == "candidate")
         
-        # 计算发言占比
-        interviewer_ratio = interviewer_utterances / total_utterances if total_utterances > 0 else 0
-        candidate_ratio = candidate_utterances / total_utterances if total_utterances > 0 else 0
+        # ========== 字数统计 ==========
+        interviewer_chars = sum(len(s.get("text", "")) for s in speaker_segments if s.get("speaker") == "interviewer")
+        candidate_chars = sum(len(s.get("text", "")) for s in speaker_segments if s.get("speaker") == "candidate")
+        total_chars = interviewer_chars + candidate_chars
         
-        # 计算总体抑郁水平
+        # ========== 发言占比（按次数） ==========
+        interviewer_ratio_by_count = interviewer_utterances / total_utterances if total_utterances > 0 else 0
+        candidate_ratio_by_count = candidate_utterances / total_utterances if total_utterances > 0 else 0
+        
+        # ========== 发言占比（按字数） ==========
+        interviewer_ratio_by_chars = interviewer_chars / total_chars if total_chars > 0 else 0
+        candidate_ratio_by_chars = candidate_chars / total_chars if total_chars > 0 else 0
+        
+        # ========== 大五人格平均值 ==========
+        big_five_scores = {
+            "openness": [],
+            "conscientiousness": [],
+            "extraversion": [],
+            "agreeableness": [],
+            "neuroticism": []
+        }
+        for seg in speaker_segments:
+            scores = seg.get("candidate_scores", {})
+            if scores and scores.get("big_five"):
+                bf = scores["big_five"]
+                for dim in big_five_scores:
+                    if dim in bf and bf[dim] is not None:
+                        big_five_scores[dim].append(bf[dim])
+        
+        big_five_average = {}
+        for dim, values in big_five_scores.items():
+            big_five_average[dim] = round(sum(values) / len(values), 4) if values else 0.5
+        
+        # ========== 抑郁水平平均值 ==========
         depression_scores = []
         for seg in speaker_segments:
             scores = seg.get("candidate_scores", {})
@@ -571,25 +600,41 @@ class CRUDImmersive(CRUDBase[ImmersiveSession]):
         
         avg_depression = sum(depression_scores) / len(depression_scores) if depression_scores else 0
         if avg_depression < 30:
-            final_level = "low"
+            depression_level = "low"
         elif avg_depression < 60:
-            final_level = "medium"
+            depression_level = "medium"
         else:
-            final_level = "high"
+            depression_level = "high"
         
-        overall_depression = {
-            "avg_score": round(avg_depression, 2),
-            "final_level": final_level
+        depression_average = {
+            "score": round(avg_depression, 2),
+            "level": depression_level
         }
         
-        # 构建统计数据
+        # ========== 构建统计数据 ==========
         statistics = {
-            "total_utterances": total_utterances,
-            "interviewer_utterances": interviewer_utterances,
-            "candidate_utterances": candidate_utterances,
-            "interviewer_ratio": round(interviewer_ratio, 2),
-            "candidate_ratio": round(candidate_ratio, 2),
-            "overall_depression": overall_depression
+            "utterance_count": {
+                "total": total_utterances,
+                "interviewer": interviewer_utterances,
+                "candidate": candidate_utterances
+            },
+            "char_count": {
+                "total": total_chars,
+                "interviewer": interviewer_chars,
+                "candidate": candidate_chars
+            },
+            "speaking_ratio": {
+                "by_count": {
+                    "interviewer": round(interviewer_ratio_by_count, 4),
+                    "candidate": round(candidate_ratio_by_count, 4)
+                },
+                "by_chars": {
+                    "interviewer": round(interviewer_ratio_by_chars, 4),
+                    "candidate": round(candidate_ratio_by_chars, 4)
+                }
+            },
+            "big_five_average": big_five_average,
+            "depression_average": depression_average
         }
         
         # 构建会话历史（每条记录捆绑三项评分）

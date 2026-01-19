@@ -313,6 +313,95 @@ async def complete_immersive_session(
         raise BadRequestException(f"完成会话失败: {str(e)}")
 
 
+@router.get("/{session_id}/record", summary="获取面试记录（精简版）")
+async def get_interview_record(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取面试记录（精简版，供最终推荐模块使用）
+    
+    返回内容：
+    - 基本信息：ID、候选人、岗位、时间
+    - 统计数据：从 final_analysis 中读取（面试完成时已计算）
+    - 完整会话记录：包含对话内容及心理评分
+    
+    **注意**：此接口仅返回已完成的面试记录
+    """
+    session = await immersive_crud.get_with_application(db, session_id)
+    if not session:
+        raise NotFoundException(f"沉浸式面试会话不存在: {session_id}")
+    
+    if not session.is_completed:
+        raise BadRequestException("面试会话尚未完成，无法获取记录")
+    
+    # 从 final_analysis 获取已计算的统计数据
+    final_analysis = session.final_analysis or {}
+    
+    # 构建精简响应
+    record = {
+        "id": session.id,
+        "application_id": session.application_id,
+        "candidate_name": None,
+        "position_title": None,
+        "created_at": session.created_at,
+        "start_time": session.start_time,
+        "end_time": session.end_time,
+        "duration_seconds": session.duration_seconds or 0,
+        "is_completed": session.is_completed,
+        "statistics": final_analysis.get("statistics", {}),
+        "conversation_history": final_analysis.get("conversation_history", [])
+    }
+    
+    # 添加关联信息
+    if session.application:
+        if session.application.resume:
+            record["candidate_name"] = session.application.resume.candidate_name
+        if session.application.position:
+            record["position_title"] = session.application.position.title
+    
+    return success_response(data=record)
+
+
+@router.get("/by-application/{application_id}/record", summary="按申请ID获取面试记录")
+async def get_interview_record_by_application(
+    application_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    按申请ID获取面试记录（精简版，供最终推荐模块使用）
+    
+    自动获取该申请最新的已完成面试记录
+    """
+    session = await immersive_crud.get_completed_by_application(db, application_id)
+    if not session:
+        raise NotFoundException(f"未找到该申请的已完成面试记录: {application_id}")
+    
+    final_analysis = session.final_analysis or {}
+    
+    record = {
+        "id": session.id,
+        "application_id": session.application_id,
+        "candidate_name": None,
+        "position_title": None,
+        "created_at": session.created_at,
+        "start_time": session.start_time,
+        "end_time": session.end_time,
+        "duration_seconds": session.duration_seconds or 0,
+        "is_completed": session.is_completed,
+        "statistics": final_analysis.get("statistics", {}),
+        "conversation_history": final_analysis.get("conversation_history", [])
+    }
+    
+    if session.application:
+        if session.application.resume:
+            record["candidate_name"] = session.application.resume.candidate_name
+        if session.application.position:
+            record["position_title"] = session.application.position.title
+    
+    return success_response(data=record)
+
+
 @router.post("/{session_id}/sync", summary="同步实时数据", response_model=DictResponse)
 async def sync_realtime_data(
     session_id: str,
@@ -321,23 +410,6 @@ async def sync_realtime_data(
 ):
     """
     同步实时数据（简化版）
-    
-    请求结构：
-    ```json
-    {
-      "utterances": [
-        {
-          "speaker": "interviewer" | "candidate",
-          "text": "发言内容",
-          "timestamp": 1768720937024,  // 毫秒时间戳
-          "candidate_scores": {        // 候选人心理评分（每次都带）
-            "big_five": {...},
-            "deception": {...},
-            "depression": {...}
-          }
-        }
-      ]
-    }
     """
     try:
         session = await immersive_crud.sync_utterances(db, session_id, data)
