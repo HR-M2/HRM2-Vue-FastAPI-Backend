@@ -3,7 +3,7 @@ API 路由模块
 """
 from fastapi import APIRouter
 
-from .v1 import positions, resumes, applications, screening, video, interview, analysis, ai_services, immersive
+from .v1 import positions, resumes, applications, screening, video, interview, analysis, ai_services, immersive, psychological
 
 # 创建主路由
 api_router = APIRouter()
@@ -53,4 +53,8 @@ api_router.include_router(
     immersive.router,
     prefix="/immersive",
     tags=["沉浸式面试"]
+)
+api_router.include_router(
+    psychological.router,
+    tags=["心理分析"]
 )

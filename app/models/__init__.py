@@ -33,6 +33,7 @@ from .video import VideoAnalysis
 from .interview import InterviewSession
 from .immersive import ImmersiveSession
 from .analysis import ComprehensiveAnalysis
+from .psychological import PsychologicalReport
 
 __all__ = [
     "BaseModel",
@@ -45,4 +46,5 @@ __all__ = [
     "InterviewSession",
     "ImmersiveSession",
     "ComprehensiveAnalysis",
+    "PsychologicalReport",
 ]

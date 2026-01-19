@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from .interview import InterviewSession
     from .immersive import ImmersiveSession
     from .analysis import ComprehensiveAnalysis
+    from .psychological import PsychologicalReport
 
 
 class Application(BaseModel):
@@ -108,6 +109,12 @@ class Application(BaseModel):
         "ComprehensiveAnalysis",
         back_populates="application",
         uselist=False,
+        lazy="selectin",
+        cascade="all, delete-orphan"
+    )
+    psychological_reports: Mapped[list["PsychologicalReport"]] = relationship(
+        "PsychologicalReport",
+        back_populates="application",
         lazy="selectin",
         cascade="all, delete-orphan"
     )

@@ -10,6 +10,7 @@ from .base import BaseModel
 
 if TYPE_CHECKING:
     from .application import Application
+    from .psychological import PsychologicalReport
 
 
 class ImmersiveSession(BaseModel):
@@ -243,6 +244,12 @@ class ImmersiveSession(BaseModel):
     application: Mapped["Application"] = relationship(
         "Application",
         back_populates="immersive_session"
+    )
+    psychological_report: Mapped[Optional["PsychologicalReport"]] = relationship(
+        "PsychologicalReport",
+        back_populates="session",
+        uselist=False,
+        cascade="all, delete-orphan"
     )
     
     @property
